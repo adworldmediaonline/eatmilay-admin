@@ -10,9 +10,15 @@ const roles = {
   super_admin: adminAc,
 };
 
-// Use same-origin /api/auth (proxied to backend) for cross-domain cookie support
+// Client: same-origin (proxied) for first-party cookies. SSR/build: full backend URL.
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3005";
+const baseURL =
+  typeof window !== "undefined"
+    ? `${window.location.origin}/api/auth`
+    : `${apiUrl}/api/auth`;
+
 export const authClient = createAuthClient({
-  baseURL: "/api/auth",
+  baseURL,
   fetchOptions: {
     credentials: "include",
   },
