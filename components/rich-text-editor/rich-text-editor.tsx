@@ -61,7 +61,16 @@ export function RichTextEditor({
     editorProps: {
       attributes: {
         class:
-          "min-w-0 p-4 focus:outline-none prose prose-sm dark:prose-invert max-w-none [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-6 [&_ol]:pl-6 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_pre]:my-2 [&_blockquote]:my-2 [&_hr]:my-4",
+          "min-w-0 p-4 focus:outline-none prose prose-sm dark:prose-invert max-w-none " +
+          "[&_h1]:text-lg [&_h1]:font-bold [&_h1]:mt-4 [&_h1]:mb-2 [&_h1]:first:mt-0 " +
+          "[&_h2]:text-base [&_h2]:font-semibold [&_h2]:mt-3 [&_h2]:mb-2 " +
+          "[&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-2 [&_h3]:mb-1 " +
+          "[&_p]:mb-2 [&_p:last-child]:mb-0 " +
+          "[&_ul]:list-disc [&_ul]:pl-6 [&_ul]:my-2 [&_ul]:space-y-1 " +
+          "[&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-2 [&_ol]:space-y-1 " +
+          "[&_strong]:font-semibold [&_em]:italic [&_blockquote]:border-l-4 [&_blockquote]:border-muted-foreground [&_blockquote]:pl-4 [&_blockquote]:italic " +
+          "[&_pre]:bg-muted [&_pre]:rounded-lg [&_pre]:p-4 [&_pre]:my-2 [&_pre]:overflow-x-auto " +
+          "[&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:bg-muted/50 [&_th]:p-2 [&_td]:border [&_td]:border-border [&_td]:p-2 [&_hr]:my-4",
       },
       handlePaste: (view, event) => {
         const text = event.clipboardData?.getData("text/plain")?.trim();
