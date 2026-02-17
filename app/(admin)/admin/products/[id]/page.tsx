@@ -42,6 +42,8 @@ export default function EditProductPage() {
           slug: product.slug,
           shortDescription: product.shortDescription ?? "",
           description: product.description ?? "",
+          nutrients: product.nutrients ?? "",
+          benefits: product.benefits ?? "",
           categoryId: product.categoryId ?? null,
           price: product.price,
           compareAtPrice: product.compareAtPrice ?? null,

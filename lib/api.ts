@@ -509,6 +509,8 @@ export type Product = {
   name: string;
   slug: string;
   description: string;
+  nutrients?: string;
+  benefits?: string;
   shortDescription: string;
   categoryId: string | null;
   categoryName: string | null;
@@ -562,6 +564,8 @@ export type ProductCreateInput = {
   name: string;
   slug?: string;
   description?: string;
+  nutrients?: string;
+  benefits?: string;
   shortDescription?: string;
   categoryId?: string;
   price: number;
@@ -606,6 +610,8 @@ export type ProductUpdateInput = Partial<{
   name: string;
   slug: string;
   description: string;
+  nutrients?: string;
+  benefits?: string;
   shortDescription: string;
   categoryId: string | null;
   price: number;

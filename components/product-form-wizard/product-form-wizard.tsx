@@ -65,6 +65,8 @@ const productSchema = z.object({
   slug: z.string().optional(),
   shortDescription: z.string().max(500).optional(),
   description: z.string().optional(),
+  nutrients: z.string().optional(),
+  benefits: z.string().optional(),
   categoryId: z.string().optional().nullable(),
   price: z.number().min(0, "Price must be 0 or more"),
   compareAtPrice: z.number().min(0).optional().nullable(),
@@ -178,6 +180,8 @@ export function ProductFormWizard({
       slug: initialData?.slug ?? "",
       shortDescription: initialData?.shortDescription ?? "",
       description: initialData?.description ?? "",
+      nutrients: initialData?.nutrients ?? "",
+      benefits: initialData?.benefits ?? "",
       categoryId: initialData?.categoryId ?? null,
       price: initialData?.price ?? 0,
       compareAtPrice: initialData?.compareAtPrice ?? null,
@@ -195,6 +199,8 @@ export function ProductFormWizard({
   });
 
   const description = watch("description");
+  const nutrients = watch("nutrients");
+  const benefits = watch("benefits");
   const categoryId = watch("categoryId");
   const name = watch("name");
   const slug = watch("slug");
@@ -335,6 +341,8 @@ export function ProductFormWizard({
       name: data.name,
       slug: slugManuallyEdited ? (data.slug || undefined) : undefined,
       description: data.description || undefined,
+      nutrients: data.nutrients || undefined,
+      benefits: data.benefits || undefined,
       shortDescription: data.shortDescription || undefined,
       categoryId: data.categoryId || undefined,
       price,
@@ -573,6 +581,22 @@ export function ProductFormWizard({
                   value={description ?? ""}
                   onChange={(v) => setValue("description", v)}
                   placeholder="Product description..."
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="nutrients">Nutrients</Label>
+                <RichTextEditor
+                  value={nutrients ?? ""}
+                  onChange={(v) => setValue("nutrients", v)}
+                  placeholder="Nutritional information, vitamins, minerals..."
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="benefits">Benefits</Label>
+                <RichTextEditor
+                  value={benefits ?? ""}
+                  onChange={(v) => setValue("benefits", v)}
+                  placeholder="Health benefits, usage benefits..."
                 />
               </div>
               <div className="space-y-2">
