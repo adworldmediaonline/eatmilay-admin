@@ -51,7 +51,10 @@ const STATUS_VARIANTS: Record<
 > = {
   pending: "outline",
   paid: "default",
+  confirmed: "default",
+  processing: "secondary",
   shipped: "secondary",
+  delivered: "default",
   cancelled: "destructive",
 };
 

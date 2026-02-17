@@ -379,11 +379,11 @@ export default function OrderDetailPage() {
           <SheetHeader>
             <SheetTitle>Tracking</SheetTitle>
           </SheetHeader>
-          {trackingData && (
+          {trackingData != null ? (
             <pre className="max-h-[60vh] overflow-auto rounded bg-muted p-4 text-xs">
               {JSON.stringify(trackingData, null, 2)}
             </pre>
-          )}
+          ) : null}
         </SheetContent>
       </Sheet>
     </div>
