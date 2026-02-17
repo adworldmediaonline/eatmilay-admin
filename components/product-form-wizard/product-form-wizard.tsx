@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -116,7 +116,8 @@ export function ProductFormWizard({
   const [step, setStep] = useState(stepIndex);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [images, setImages] = useState<ProductImage[]>(initialData?.images ?? []);
-  const [slugManuallyEdited, setSlugManuallyEdited] = useState(!!initialData?.slug);
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const slugProgrammaticUpdateRef = useRef(false);
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
   const [slugCheckDebounce, setSlugCheckDebounce] = useState<NodeJS.Timeout | null>(
     null
@@ -332,7 +333,7 @@ export function ProductFormWizard({
 
     const payload = {
       name: data.name,
-      slug: data.slug || undefined,
+      slug: slugManuallyEdited ? (data.slug || undefined) : undefined,
       description: data.description || undefined,
       shortDescription: data.shortDescription || undefined,
       categoryId: data.categoryId || undefined,
@@ -520,6 +521,7 @@ export function ProductFormWizard({
                   {...register("name", {
                     onChange: (e) => {
                       if (!slugManuallyEdited) {
+                        slugProgrammaticUpdateRef.current = true;
                         setValue("slug", slugify(e.target.value));
                       }
                     },
@@ -536,7 +538,13 @@ export function ProductFormWizard({
                 <Input
                   id="slug"
                   {...register("slug", {
-                    onChange: () => setSlugManuallyEdited(true),
+                    onChange: () => {
+                      if (slugProgrammaticUpdateRef.current) {
+                        slugProgrammaticUpdateRef.current = false;
+                      } else {
+                        setSlugManuallyEdited(true);
+                      }
+                    },
                   })}
                   placeholder="product-slug"
                   className={errors.slug ? "border-destructive" : ""}
