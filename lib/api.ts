@@ -288,6 +288,8 @@ export type Order = {
   estimatedDelivery?: string | null;
   trackingNumber?: string | null;
   shiprocketShipmentId?: number | null;
+  shiprocketError?: string | null;
+  shiprocketErrorAt?: string | null;
 };
 
 export type TrackingData = {

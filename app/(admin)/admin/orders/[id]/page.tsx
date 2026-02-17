@@ -259,6 +259,12 @@ export default function OrderDetailPage() {
                     </dd>
                   </div>
                 )}
+                {order.shiprocketError && !order.trackingNumber && (
+                  <div>
+                    <dt className="text-muted-foreground">Shiprocket error</dt>
+                    <dd className="text-destructive text-sm">{order.shiprocketError}</dd>
+                  </div>
+                )}
               </dl>
               <div className="flex gap-2 pt-2">
                 {!order.trackingNumber && (
