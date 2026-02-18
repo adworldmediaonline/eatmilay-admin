@@ -308,7 +308,10 @@ export default function OrderDetailPage() {
                 <SelectContent>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="paid">Paid</SelectItem>
+                  <SelectItem value="confirmed">Confirmed</SelectItem>
+                  <SelectItem value="processing">Processing</SelectItem>
                   <SelectItem value="shipped">Shipped</SelectItem>
+                  <SelectItem value="delivered">Delivered</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
@@ -363,7 +366,7 @@ export default function OrderDetailPage() {
           </Table>
           <div className="space-y-1 border-t p-4 text-right text-sm">
             <p>Subtotal: {formatPrice(order.subtotal, order.currency)}</p>
-            {order.discountAmount > 0 && (
+            {order.discountAmount != null && order.discountAmount > 0 && (
               <p className="text-muted-foreground">
                 Discount: -{formatPrice(order.discountAmount, order.currency)}
               </p>
@@ -372,6 +375,9 @@ export default function OrderDetailPage() {
               <p className="text-muted-foreground">
                 Coupon: {order.couponCode}
               </p>
+            )}
+            {order.shippingAmount != null && order.shippingAmount > 0 && (
+              <p>Shipping: {formatPrice(order.shippingAmount, order.currency)}</p>
             )}
             <p className="font-semibold">
               Total: {formatPrice(order.total, order.currency)}
