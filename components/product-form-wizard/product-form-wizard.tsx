@@ -231,7 +231,9 @@ export function ProductFormWizard({
   const isDirtyState = isDirty || imagesDirty || bundleDirty;
 
   useEffect(() => {
-    getProductCategories().then(setCategories).catch(() => {});
+    getProductCategories({ limit: 10000 })
+      .then((d) => setCategories(d.items))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {

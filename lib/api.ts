@@ -119,8 +119,32 @@ export type ProductCategory = {
   updatedAt: string;
 };
 
-export async function getProductCategories(): Promise<ProductCategory[]> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/product-categories`);
+export type GetProductCategoriesParams = {
+  search?: string;
+  sortBy?: "name" | "slug" | "createdAt" | "updatedAt";
+  sortOrder?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+  signal?: AbortSignal;
+};
+
+export type GetProductCategoriesResponse = {
+  items: ProductCategory[];
+  total: number;
+};
+
+export async function getProductCategories(
+  params?: GetProductCategoriesParams
+): Promise<GetProductCategoriesResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.search?.trim()) searchParams.set("search", params.search.trim());
+  if (params?.sortBy) searchParams.set("sortBy", params.sortBy);
+  if (params?.sortOrder) searchParams.set("sortOrder", params.sortOrder);
+  if (params?.limit != null) searchParams.set("limit", String(params.limit));
+  if (params?.offset != null) searchParams.set("offset", String(params.offset));
+  const search = searchParams.toString();
+  const url = `${apiUrl}/api/admin/product-categories${search ? `?${search}` : ""}`;
+  const res = await fetchWithAuth(url, { signal: params?.signal });
   if (!res.ok) throw new Error("Failed to fetch categories");
   return res.json();
 }
@@ -183,8 +207,32 @@ export type ProductCollection = {
   updatedAt: string;
 };
 
-export async function getProductCollections(): Promise<ProductCollection[]> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/product-collections`);
+export type GetProductCollectionsParams = {
+  search?: string;
+  sortBy?: "name" | "slug" | "createdAt" | "updatedAt";
+  sortOrder?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+  signal?: AbortSignal;
+};
+
+export type GetProductCollectionsResponse = {
+  items: ProductCollection[];
+  total: number;
+};
+
+export async function getProductCollections(
+  params?: GetProductCollectionsParams
+): Promise<GetProductCollectionsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.search?.trim()) searchParams.set("search", params.search.trim());
+  if (params?.sortBy) searchParams.set("sortBy", params.sortBy);
+  if (params?.sortOrder) searchParams.set("sortOrder", params.sortOrder);
+  if (params?.limit != null) searchParams.set("limit", String(params.limit));
+  if (params?.offset != null) searchParams.set("offset", String(params.offset));
+  const search = searchParams.toString();
+  const url = `${apiUrl}/api/admin/product-collections${search ? `?${search}` : ""}`;
+  const res = await fetchWithAuth(url, { signal: params?.signal });
   if (!res.ok) throw new Error("Failed to fetch collections");
   return res.json();
 }
@@ -310,13 +358,36 @@ export type TrackingData = {
   };
 };
 
-export async function getOrders(params?: {
+export type GetOrdersParams = {
   status?: string;
   paymentStatus?: string;
-}): Promise<Order[]> {
-  const search = new URLSearchParams(params as Record<string, string>).toString();
+  search?: string;
+  sortBy?: "orderNumber" | "createdAt" | "total" | "status";
+  sortOrder?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+  signal?: AbortSignal;
+};
+
+export type GetOrdersResponse = {
+  items: Order[];
+  total: number;
+};
+
+export async function getOrders(
+  params?: GetOrdersParams
+): Promise<GetOrdersResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.status) searchParams.set("status", params.status);
+  if (params?.paymentStatus) searchParams.set("paymentStatus", params.paymentStatus);
+  if (params?.search?.trim()) searchParams.set("search", params.search.trim());
+  if (params?.sortBy) searchParams.set("sortBy", params.sortBy);
+  if (params?.sortOrder) searchParams.set("sortOrder", params.sortOrder);
+  if (params?.limit != null) searchParams.set("limit", String(params.limit));
+  if (params?.offset != null) searchParams.set("offset", String(params.offset));
+  const search = searchParams.toString();
   const url = `${apiUrl}/api/admin/orders${search ? `?${search}` : ""}`;
-  const res = await fetchWithAuth(url);
+  const res = await fetchWithAuth(url, { signal: params?.signal });
   if (!res.ok) throw new Error("Failed to fetch orders");
   return res.json();
 }
@@ -406,8 +477,34 @@ export type Discount = {
   updatedAt: string;
 };
 
-export async function getDiscounts(): Promise<Discount[]> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/discounts`);
+export type GetDiscountsParams = {
+  status?: string;
+  search?: string;
+  sortBy?: "code" | "createdAt" | "updatedAt" | "status";
+  sortOrder?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+  signal?: AbortSignal;
+};
+
+export type GetDiscountsResponse = {
+  items: Discount[];
+  total: number;
+};
+
+export async function getDiscounts(
+  params?: GetDiscountsParams
+): Promise<GetDiscountsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.status) searchParams.set("status", params.status);
+  if (params?.search?.trim()) searchParams.set("search", params.search.trim());
+  if (params?.sortBy) searchParams.set("sortBy", params.sortBy);
+  if (params?.sortOrder) searchParams.set("sortOrder", params.sortOrder);
+  if (params?.limit != null) searchParams.set("limit", String(params.limit));
+  if (params?.offset != null) searchParams.set("offset", String(params.offset));
+  const search = searchParams.toString();
+  const url = `${apiUrl}/api/admin/discounts${search ? `?${search}` : ""}`;
+  const res = await fetchWithAuth(url, { signal: params?.signal });
   if (!res.ok) throw new Error("Failed to fetch discounts");
   return res.json();
 }

@@ -310,7 +310,9 @@ export default function ProductsPage() {
   }, [loadProducts]);
 
   useEffect(() => {
-    getProductCategories().then(setCategories).catch(() => {});
+    getProductCategories({ limit: 10000 })
+      .then((d) => setCategories(d.items))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
