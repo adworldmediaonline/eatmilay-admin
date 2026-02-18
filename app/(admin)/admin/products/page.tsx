@@ -36,7 +36,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import Image from "next/image";
-import { EyeIcon, PlusIcon, Trash2Icon, Loader2Icon } from "lucide-react";
+import { DownloadIcon, EyeIcon, PlusIcon, Trash2Icon, Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ProductsPage() {
@@ -59,6 +59,45 @@ export default function ProductsPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const downloadProducts = () => {
+    if (products.length === 0) {
+      toast.error("No products to download");
+      return;
+    }
+    const frontendUrl =
+      (process.env.NEXT_PUBLIC_FRONTEND_USER_URL ?? "").replace(/\/$/, "") ||
+      "https://www.eatmilay.com";
+    const headers = ["Product Name", "Product URL", "Price", "Images", "SKU"];
+    const escapeCsv = (val: string): string => {
+      const str = String(val ?? "");
+      if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    const rows = products.map((p) => [
+      escapeCsv(p.name),
+      escapeCsv(`${frontendUrl}/products/${p.slug}`),
+      escapeCsv(String(p.price)),
+      escapeCsv(
+        (p.images ?? [])
+          .map((img) => img.url)
+          .filter(Boolean)
+          .join(" | ")
+      ),
+      escapeCsv(p.sku ?? ""),
+    ]);
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `products-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Products downloaded");
   };
 
   const handleDelete = async () => {
@@ -104,6 +143,14 @@ export default function ProductsPage() {
                 <SelectItem value="published">Published</SelectItem>
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              onClick={downloadProducts}
+              disabled={loading || products.length === 0}
+            >
+              <DownloadIcon className="size-4" />
+              Download Products
+            </Button>
             <Button asChild>
               <Link href="/admin/products/new">
                 <PlusIcon className="size-4" />
