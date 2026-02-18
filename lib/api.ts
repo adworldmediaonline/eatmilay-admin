@@ -501,8 +501,10 @@ export type Discount = {
   minOrderAmount: number | null;
   maxUsage: number | null;
   usedCount: number;
+  startsAt: string | null;
   expiresAt: string | null;
-  status: "active" | "disabled";
+  status: "active" | "disabled" | "scheduled";
+  effectiveStatus?: "active" | "disabled" | "scheduled" | "expired";
   createdAt: string;
   updatedAt: string;
 };
@@ -552,8 +554,9 @@ export async function createDiscount(data: {
   productIds?: string[];
   minOrderAmount?: number | null;
   maxUsage?: number | null;
+  startsAt?: string | null;
   expiresAt?: string | null;
-  status?: "active" | "disabled";
+  status?: "active" | "disabled" | "scheduled";
 }): Promise<Discount> {
   const res = await fetchWithAuth(`${apiUrl}/api/admin/discounts`, {
     method: "POST",
@@ -575,8 +578,9 @@ export async function updateDiscount(
     productIds: string[];
     minOrderAmount: number | null;
     maxUsage: number | null;
+    startsAt: string | null;
     expiresAt: string | null;
-    status: "active" | "disabled";
+    status: "active" | "disabled" | "scheduled";
   }>
 ): Promise<Discount> {
   const res = await fetchWithAuth(`${apiUrl}/api/admin/discounts/${id}`, {
@@ -756,6 +760,27 @@ export async function createProduct(data: ProductCreateInput): Promise<Product> 
     throw new Error(err.error ?? "Failed to create product");
   }
   return res.json();
+}
+
+export type ImportProductsResult = {
+  created: number;
+  failed: number;
+  total: number;
+  errors: Array<{ row: number; message: string }>;
+};
+
+export async function importProducts(
+  content: string
+): Promise<ImportProductsResult> {
+  const res = await fetchWithAuth(`${apiUrl}/api/admin/products/import`, {
+    method: "POST",
+    body: JSON.stringify({ content }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error ?? "Failed to import products");
+  }
+  return data;
 }
 
 export type ProductUpdateInput = Partial<{
