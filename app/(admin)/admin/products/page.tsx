@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, memo } from "react";
 import Link from "next/link";
 import {
   getProducts,
@@ -95,6 +95,166 @@ const PAGE_SIZES = [10, 20, 50] as const;
 type SortBy = "name" | "price" | "updatedAt" | "stockQuantity";
 type SortOrder = "asc" | "desc";
 
+const STOCK_VARIANT_MAP: Record<
+  StockStatus,
+  "default" | "secondary" | "destructive" | "outline"
+> = {
+  in_stock: "default",
+  low_stock: "outline",
+  out_of_stock: "destructive",
+  backorder: "secondary",
+};
+
+const ProductTableRow = memo(function ProductTableRow({
+  product,
+  onDuplicate,
+  onDelete,
+  duplicatingId,
+}: {
+  product: Product;
+  onDuplicate: (id: string) => void;
+  onDelete: (id: string) => void;
+  duplicatingId: string | null;
+}) {
+  const status = getProductStockStatus(product);
+  const qty = getDisplayStockQty(product);
+  const label = getStockStatusLabel(status);
+  const showQty = product.trackInventory !== false && qty >= 0;
+
+  return (
+    <TableRow>
+      <TableCell>
+        {product.images?.[0]?.url ? (
+          <Image
+            src={product.images[0].url}
+            alt={
+              product.images[0].alt ||
+              product.images[0].title ||
+              product.name
+            }
+            width={48}
+            height={48}
+            className="size-12 rounded-md object-cover"
+          />
+        ) : (
+          <div className="flex size-12 items-center justify-center rounded-md border bg-muted/50">
+            <ImageIcon className="size-5 text-muted-foreground" />
+          </div>
+        )}
+      </TableCell>
+      <TableCell>
+        <div className="flex flex-col gap-1">
+          <Link
+            href={`/admin/products/${product.id}`}
+            className="font-medium hover:underline"
+          >
+            {product.name}
+          </Link>
+          {product.sku && (
+            <Badge
+              variant="secondary"
+              className="w-fit text-xs font-normal"
+            >
+              {product.sku}
+            </Badge>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="text-muted-foreground">
+        {product.categoryName ?? "—"}
+      </TableCell>
+      <TableCell>
+        {formatPrice(product.price, product.currency ?? "USD")}
+        {product.compareAtPrice && (
+          <span className="text-muted-foreground ml-1 text-sm line-through">
+            {formatPrice(product.compareAtPrice, product.currency ?? "USD")}
+          </span>
+        )}
+      </TableCell>
+      <TableCell>
+        <Badge variant={STOCK_VARIANT_MAP[status]}>
+          {showQty ? `${label} (${qty})` : label}
+        </Badge>
+      </TableCell>
+      <TableCell>
+        <div className="flex flex-wrap gap-1">
+          <Badge
+            variant={
+              product.status === "published"
+                ? "default"
+                : "secondary"
+            }
+          >
+            {product.status}
+          </Badge>
+          {product.productType &&
+            product.productType !== "simple" && (
+              <Badge
+                variant="outline"
+                className="capitalize"
+              >
+                {product.productType}
+              </Badge>
+            )}
+        </div>
+      </TableCell>
+      <TableCell>
+        <span className="text-muted-foreground text-sm">
+          {product.updatedAt
+            ? new Date(product.updatedAt).toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })
+            : "—"}
+        </span>
+      </TableCell>
+      <TableCell>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <MoreHorizontalIcon className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem asChild>
+              <Link href={`/admin/products/${product.id}`}>
+                <PencilIcon className="size-4" />
+                Edit
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href={`/admin/products/${product.id}/preview`}>
+                <EyeIcon className="size-4" />
+                Preview
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => onDuplicate(product.id)}
+              disabled={duplicatingId === product.id}
+            >
+              {duplicatingId === product.id ? (
+                <Loader2Icon className="size-4 animate-spin" />
+              ) : (
+                <CopyIcon className="size-4" />
+              )}
+              Duplicate
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => onDelete(product.id)}
+            >
+              <Trash2Icon className="size-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </TableCell>
+    </TableRow>
+  );
+});
+
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
@@ -112,7 +272,13 @@ export default function ProductsPage() {
   const [deleting, setDeleting] = useState(false);
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
 
+  const abortRef = useRef<AbortController | null>(null);
+
   const loadProducts = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const signal = controller.signal;
     setLoading(true);
     try {
       const params: Parameters<typeof getProducts>[0] = {
@@ -120,6 +286,7 @@ export default function ProductsPage() {
         sortOrder,
         limit: pageSize,
         offset: (page - 1) * pageSize,
+        signal,
       };
       if (statusFilter && statusFilter !== "all") params.status = statusFilter;
       if (categoryFilter && categoryFilter !== "all")
@@ -127,12 +294,14 @@ export default function ProductsPage() {
       if (searchQuery.trim()) params.search = searchQuery.trim();
 
       const data = await getProducts(params);
+      if (signal.aborted) return;
       setProducts(data.items);
       setTotal(data.total);
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       toast.error("Failed to load products");
     } finally {
-      setLoading(false);
+      if (!signal.aborted) setLoading(false);
     }
   }, [statusFilter, categoryFilter, searchQuery, sortBy, sortOrder, page, pageSize]);
 
@@ -145,7 +314,7 @@ export default function ProductsPage() {
   }, []);
 
   useEffect(() => {
-    const t = setTimeout(() => setSearchQuery(searchInput), 300);
+    const t = setTimeout(() => setSearchQuery(searchInput), 200);
     return () => clearTimeout(t);
   }, [searchInput]);
 
@@ -425,164 +594,13 @@ export default function ProductsPage() {
                   </TableHeader>
                   <TableBody>
                     {products.map((product) => (
-                      <TableRow key={product.id}>
-                        <TableCell>
-                          {product.images?.[0]?.url ? (
-                            <Image
-                              src={product.images[0].url}
-                              alt={
-                                product.images[0].alt ||
-                                product.images[0].title ||
-                                product.name
-                              }
-                              width={48}
-                              height={48}
-                              className="size-12 rounded-md object-cover"
-                            />
-                          ) : (
-                            <div className="flex size-12 items-center justify-center rounded-md border bg-muted/50">
-                              <ImageIcon className="size-5 text-muted-foreground" />
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <Link
-                              href={`/admin/products/${product.id}`}
-                              className="font-medium hover:underline"
-                            >
-                              {product.name}
-                            </Link>
-                            {product.sku && (
-                              <Badge
-                                variant="secondary"
-                                className="w-fit text-xs font-normal"
-                              >
-                                {product.sku}
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {product.categoryName ?? "—"}
-                        </TableCell>
-                        <TableCell>
-                          {formatPrice(
-                            product.price,
-                            product.currency ?? "USD"
-                          )}
-                          {product.compareAtPrice && (
-                            <span className="text-muted-foreground ml-1 text-sm line-through">
-                              {formatPrice(
-                                product.compareAtPrice,
-                                product.currency ?? "USD"
-                              )}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {(() => {
-                            const status = getProductStockStatus(product);
-                            const qty = getDisplayStockQty(product);
-                            const variantMap: Record<
-                              StockStatus,
-                              "default" | "secondary" | "destructive" | "outline"
-                            > = {
-                              in_stock: "default",
-                              low_stock: "outline",
-                              out_of_stock: "destructive",
-                              backorder: "secondary",
-                            };
-                            const label = getStockStatusLabel(status);
-                            const showQty =
-                              product.trackInventory !== false && qty >= 0;
-                            return (
-                              <Badge variant={variantMap[status]}>
-                                {showQty ? `${label} (${qty})` : label}
-                              </Badge>
-                            );
-                          })()}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            <Badge
-                              variant={
-                                product.status === "published"
-                                  ? "default"
-                                  : "secondary"
-                              }
-                            >
-                              {product.status}
-                            </Badge>
-                            {product.productType &&
-                              product.productType !== "simple" && (
-                                <Badge
-                                  variant="outline"
-                                  className="capitalize"
-                                >
-                                  {product.productType}
-                                </Badge>
-                              )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-muted-foreground text-sm">
-                            {product.updatedAt
-                              ? new Date(
-                                  product.updatedAt
-                                ).toLocaleDateString(undefined, {
-                                  month: "short",
-                                  day: "numeric",
-                                  year: "numeric",
-                                })
-                              : "—"}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreHorizontalIcon className="size-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem asChild>
-                                <Link href={`/admin/products/${product.id}`}>
-                                  <PencilIcon className="size-4" />
-                                  Edit
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem asChild>
-                                <Link
-                                  href={`/admin/products/${product.id}/preview`}
-                                >
-                                  <EyeIcon className="size-4" />
-                                  Preview
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleDuplicate(product.id)}
-                                disabled={duplicatingId === product.id}
-                              >
-                                {duplicatingId === product.id ? (
-                                  <Loader2Icon className="size-4 animate-spin" />
-                                ) : (
-                                  <CopyIcon className="size-4" />
-                                )}
-                                Duplicate
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                variant="destructive"
-                                onClick={() => setDeleteId(product.id)}
-                              >
-                                <Trash2Icon className="size-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
+                      <ProductTableRow
+                        key={product.id}
+                        product={product}
+                        onDuplicate={handleDuplicate}
+                        onDelete={setDeleteId}
+                        duplicatingId={duplicatingId}
+                      />
                     ))}
                   </TableBody>
                 </Table>

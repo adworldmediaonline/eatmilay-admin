@@ -553,6 +553,7 @@ export type GetProductsParams = {
   sortOrder?: "asc" | "desc";
   limit?: number;
   offset?: number;
+  signal?: AbortSignal;
 };
 
 export type GetProductsResponse = {
@@ -573,7 +574,7 @@ export async function getProducts(
   if (params?.offset != null) searchParams.set("offset", String(params.offset));
   const search = searchParams.toString();
   const url = `${apiUrl}/api/admin/products${search ? `?${search}` : ""}`;
-  const res = await fetchWithAuth(url);
+  const res = await fetchWithAuth(url, { signal: params?.signal });
   if (!res.ok) throw new Error("Failed to fetch products");
   return res.json();
 }
