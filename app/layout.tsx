@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
-
+//
 export const metadata: Metadata = {
   title: "Admin Panel",
   description: "Admin panel for visa application platform",
