@@ -1,9 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import type { DateRange } from "react-day-picker";
-import { format } from "date-fns";
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  subMonths,
+  startOfDay,
+  endOfDay,
+} from "date-fns";
 import { getOrders, exportOrders, type Order } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -42,7 +49,61 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { CalendarIcon } from "lucide-react";
 import { toast } from "sonner";
+
+type DateRangePreset = "all" | "lastMonth" | "thisMonth" | "custom";
+
+function getPresetRange(
+  preset: DateRangePreset,
+  customRange?: DateRange
+): { startDate: string; endDate: string } | null {
+  const now = new Date();
+  if (preset === "all") return null;
+  if (preset === "lastMonth") {
+    const start = startOfMonth(subMonths(now, 1));
+    const end = endOfMonth(subMonths(now, 1));
+    return {
+      startDate: format(start, "yyyy-MM-dd"),
+      endDate: format(end, "yyyy-MM-dd"),
+    };
+  }
+  if (preset === "thisMonth") {
+    const start = startOfMonth(now);
+    const end = endOfDay(now);
+    return {
+      startDate: format(start, "yyyy-MM-dd"),
+      endDate: format(end, "yyyy-MM-dd"),
+    };
+  }
+  if (preset === "custom" && customRange?.from) {
+    const to = customRange.to ?? customRange.from;
+    return {
+      startDate: format(customRange.from, "yyyy-MM-dd"),
+      endDate: format(to, "yyyy-MM-dd"),
+    };
+  }
+  return null;
+}
+
+function getDateFilterLabel(
+  preset: DateRangePreset,
+  customRange?: DateRange
+): string {
+  if (preset === "all") return "All time";
+  if (preset === "lastMonth") return "Last Month";
+  if (preset === "thisMonth") return "This Month";
+  if (preset === "custom" && customRange?.from) {
+    const to = customRange.to ?? customRange.from;
+    return `${format(customRange.from, "MMM d, y")} - ${format(to, "MMM d, y")}`;
+  }
+  return "Custom Date Range";
+}
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: "$",
@@ -97,10 +158,19 @@ export default function OrdersPage() {
   const [pageSize, setPageSize] = useState(20);
   const abortRef = useRef<AbortController | null>(null);
 
+  const [dateRangePreset, setDateRangePreset] =
+    useState<DateRangePreset>("all");
+  const [dateRangeCustom, setDateRangeCustom] = useState<DateRange | undefined>();
+
   const [exportOpen, setExportOpen] = useState(false);
   const [exportDateRange, setExportDateRange] = useState<DateRange | undefined>();
   const [exportFormat, setExportFormat] = useState<"csv" | "xlsx">("csv");
   const [exporting, setExporting] = useState(false);
+
+  const dateFilterRange = useMemo(
+    () => getPresetRange(dateRangePreset, dateRangeCustom),
+    [dateRangePreset, dateRangeCustom]
+  );
 
   const loadOrders = useCallback(async () => {
     abortRef.current?.abort();
@@ -120,6 +190,10 @@ export default function OrdersPage() {
       if (paymentFilter && paymentFilter !== "all")
         params.paymentStatus = paymentFilter;
       if (searchQuery.trim()) params.search = searchQuery.trim();
+      if (dateFilterRange) {
+        params.startDate = dateFilterRange.startDate;
+        params.endDate = dateFilterRange.endDate;
+      }
 
       const data = await getOrders(params);
       if (signal.aborted) return;
@@ -131,7 +205,16 @@ export default function OrdersPage() {
     } finally {
       if (!signal.aborted) setLoading(false);
     }
-  }, [statusFilter, paymentFilter, searchQuery, sortBy, sortOrder, page, pageSize]);
+  }, [
+    statusFilter,
+    paymentFilter,
+    searchQuery,
+    dateFilterRange,
+    sortBy,
+    sortOrder,
+    page,
+    pageSize,
+  ]);
 
   useEffect(() => {
     loadOrders();
@@ -144,7 +227,16 @@ export default function OrdersPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, statusFilter, paymentFilter, sortBy, sortOrder, pageSize]);
+  }, [
+    searchQuery,
+    statusFilter,
+    paymentFilter,
+    dateRangePreset,
+    dateRangeCustom,
+    sortBy,
+    sortOrder,
+    pageSize,
+  ]);
 
   const handleExport = async () => {
     if (!exportDateRange?.from) {
@@ -233,6 +325,65 @@ export default function OrdersPage() {
                 className="pl-9"
               />
             </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-[180px] justify-start font-normal"
+                >
+                  <CalendarIcon className="mr-2 size-4" />
+                  {getDateFilterLabel(dateRangePreset, dateRangeCustom)}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <div className="flex flex-col p-1">
+                  <Button
+                    variant="ghost"
+                    className="justify-start font-normal"
+                    onClick={() => {
+                      setDateRangePreset("all");
+                      setDateRangeCustom(undefined);
+                    }}
+                  >
+                    All time
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="justify-start font-normal"
+                    onClick={() => {
+                      setDateRangePreset("lastMonth");
+                      setDateRangeCustom(undefined);
+                    }}
+                  >
+                    Last Month
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="justify-start font-normal"
+                    onClick={() => {
+                      setDateRangePreset("thisMonth");
+                      setDateRangeCustom(undefined);
+                    }}
+                  >
+                    This Month
+                  </Button>
+                  <div className="my-1 border-t" />
+                  <div className="p-2">
+                    <p className="mb-2 text-xs font-medium text-muted-foreground">
+                      Custom Date Range
+                    </p>
+                    <DateRangePicker
+                      value={dateRangePreset === "custom" ? dateRangeCustom : undefined}
+                      onChange={(range) => {
+                        setDateRangePreset("custom");
+                        setDateRangeCustom(range);
+                      }}
+                      placeholder="Select dates"
+                    />
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="Status" />
@@ -380,11 +531,17 @@ export default function OrdersPage() {
           ) : orders.length === 0 ? (
             <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
               <p className="text-sm">
-                {searchQuery || statusFilter !== "all" || paymentFilter !== "all"
+                {searchQuery ||
+                statusFilter !== "all" ||
+                paymentFilter !== "all" ||
+                dateRangePreset !== "all"
                   ? "No orders match your filters."
                   : "No orders yet."}
               </p>
-              {(searchQuery || statusFilter !== "all" || paymentFilter !== "all") ? (
+              {(searchQuery ||
+                statusFilter !== "all" ||
+                paymentFilter !== "all" ||
+                dateRangePreset !== "all") ? (
                 <Button
                   variant="outline"
                   className="mt-4"
@@ -393,6 +550,8 @@ export default function OrdersPage() {
                     setSearchQuery("");
                     setStatusFilter("all");
                     setPaymentFilter("all");
+                    setDateRangePreset("all");
+                    setDateRangeCustom(undefined);
                     setPage(1);
                   }}
                 >

@@ -362,6 +362,8 @@ export type GetOrdersParams = {
   status?: string;
   paymentStatus?: string;
   search?: string;
+  startDate?: string;
+  endDate?: string;
   sortBy?: "orderNumber" | "createdAt" | "total" | "status";
   sortOrder?: "asc" | "desc";
   limit?: number;
@@ -381,6 +383,8 @@ export async function getOrders(
   if (params?.status) searchParams.set("status", params.status);
   if (params?.paymentStatus) searchParams.set("paymentStatus", params.paymentStatus);
   if (params?.search?.trim()) searchParams.set("search", params.search.trim());
+  if (params?.startDate) searchParams.set("startDate", params.startDate);
+  if (params?.endDate) searchParams.set("endDate", params.endDate);
   if (params?.sortBy) searchParams.set("sortBy", params.sortBy);
   if (params?.sortOrder) searchParams.set("sortOrder", params.sortOrder);
   if (params?.limit != null) searchParams.set("limit", String(params.limit));
