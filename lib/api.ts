@@ -331,6 +331,7 @@ export type Order = {
   shippingAddress?: ShippingAddress | null;
   paymentMethod?: string | null;
   paymentStatus?: string | null;
+  razorpayOrderId?: string | null;
   shippingAmount?: number;
   courierName?: string | null;
   estimatedDelivery?: string | null;
@@ -342,18 +343,27 @@ export type Order = {
 
 export type TrackingData = {
   tracking_data: {
+    track_status?: number;
     shipment_status: number;
+    track_url?: string;
+    etd?: string;
     shipment_track: Array<{
       current_status: string;
       awb_code: string;
-      courier_name: string;
-      etd: string;
+      courier_name?: string;
+      etd?: string;
+      origin?: string;
+      destination?: string;
+      delivered_to?: string;
+      delivered_date?: string;
     }>;
     shipment_track_activities: Array<{
       date: string;
       status: string;
       activity: string;
       location: string;
+      "sr-status"?: string;
+      "sr-status-label"?: string;
     }>;
   };
 };

@@ -9,6 +9,7 @@ import {
   createShiprocketOrder,
   trackOrder,
   type Order,
+  type TrackingData,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +36,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { ArrowLeftIcon, Loader2Icon, PackageIcon, TruckIcon } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { ArrowLeftIcon, ChevronDownIcon, Loader2Icon, PackageIcon, TruckIcon } from "lucide-react";
 import { toast } from "sonner";
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -73,6 +79,62 @@ const STATUS_VARIANTS: Record<
   cancelled: "destructive",
 };
 
+const SHIPMENT_STATUS_LABELS: Record<number, string> = {
+  6: "Shipped",
+  7: "Delivered",
+  8: "Canceled",
+  9: "RTO Initiated",
+  10: "RTO Delivered",
+  12: "Lost",
+  13: "Pickup Error",
+  14: "RTO Acknowledged",
+  15: "Pickup Rescheduled",
+  16: "Cancellation Requested",
+  17: "Out For Delivery",
+  18: "In Transit",
+  19: "Out For Pickup",
+  20: "Pickup Exception",
+  21: "Undelivered",
+  22: "Delayed",
+  23: "Partial Delivered",
+  24: "Destroyed",
+  25: "Damaged",
+  26: "Fulfilled",
+  27: "Pickup Booked",
+  38: "Reached at Destination Hub",
+  39: "Misrouted",
+  40: "RTO NDR",
+  41: "RTO OFD",
+  42: "Picked Up",
+  43: "Self Fulfilled",
+  44: "Disposed Off",
+  45: "Cancelled Before Dispatched",
+  46: "RTO In Transit",
+  47: "QC Failed",
+  48: "Reached Warehouse",
+  49: "Custom Cleared",
+  50: "In Flight",
+  51: "Handover to Courier",
+  52: "Shipment Booked",
+  54: "In Transit Overseas",
+  55: "Connection Aligned",
+  56: "Reached Overseas Warehouse",
+  57: "Custom Cleared Overseas",
+  59: "Box Packing",
+  60: "FC Allocated",
+  61: "Picklist Generated",
+  62: "Ready To Pack",
+  63: "Packed",
+  67: "FC Manifest Generated",
+  68: "Processed at Warehouse",
+  71: "Handover Exception",
+  72: "Packed Exception",
+  75: "RTO Lock",
+  76: "Untraceable",
+  77: "Issue Related to Recipient",
+  78: "Reached Back at Seller City",
+};
+
 export default function OrderDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -83,8 +145,9 @@ export default function OrderDetailPage() {
   const [status, setStatus] = useState<Order["status"]>("pending");
   const [notes, setNotes] = useState("");
   const [creatingShiprocket, setCreatingShiprocket] = useState(false);
-  const [trackingData, setTrackingData] = useState<unknown | null>(null);
+  const [trackingData, setTrackingData] = useState<TrackingData | null>(null);
   const [trackingOpen, setTrackingOpen] = useState(false);
+  const [debugOpen, setDebugOpen] = useState(false);
 
   useEffect(() => {
     getOrder(id)
@@ -267,23 +330,26 @@ export default function OrderDetailPage() {
                 )}
               </dl>
               <div className="flex gap-2 pt-2">
-                {!order.trackingNumber && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleCreateShiprocket}
-                    disabled={creatingShiprocket}
-                  >
-                    {creatingShiprocket ? (
-                      <Loader2Icon className="size-4 animate-spin" />
-                    ) : (
-                      <>
-                        <PackageIcon className="size-4" />
-                        Create Shiprocket order
-                      </>
-                    )}
-                  </Button>
-                )}
+                {!order.trackingNumber &&
+                  (order.shiprocketError || !order.razorpayOrderId) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleCreateShiprocket}
+                      disabled={creatingShiprocket}
+                    >
+                      {creatingShiprocket ? (
+                        <Loader2Icon className="size-4 animate-spin" />
+                      ) : (
+                        <>
+                          <PackageIcon className="size-4" />
+                          {order.shiprocketError
+                            ? "Retry Shiprocket order"
+                            : "Create Shiprocket order"}
+                        </>
+                      )}
+                    </Button>
+                  )}
                 {order.trackingNumber && (
                   <Button size="sm" variant="outline" onClick={handleTrack}>
                     <TruckIcon className="size-4" />
@@ -387,14 +453,150 @@ export default function OrderDetailPage() {
       </div>
 
       <Sheet open={trackingOpen} onOpenChange={setTrackingOpen}>
-        <SheetContent>
+        <SheetContent className="flex max-h-dvh flex-col overflow-hidden sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>Tracking</SheetTitle>
           </SheetHeader>
           {trackingData != null ? (
-            <pre className="max-h-[60vh] overflow-auto rounded bg-muted p-4 text-xs">
-              {JSON.stringify(trackingData, null, 2)}
-            </pre>
+            <div className="flex flex-1 flex-col gap-4 overflow-y-auto pt-4">
+              {(() => {
+                const td = trackingData.tracking_data;
+                const shipment = td.shipment_track?.[0];
+                const statusLabel =
+                  SHIPMENT_STATUS_LABELS[td.shipment_status] ??
+                  shipment?.current_status ??
+                  `Status ${td.shipment_status}`;
+
+                return (
+                  <>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary" className="text-sm">
+                        {statusLabel}
+                      </Badge>
+                      {td.track_url && (
+                        <a
+                          href={td.track_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary text-sm underline"
+                        >
+                          Track on Shiprocket
+                        </a>
+                      )}
+                    </div>
+
+                    {shipment && (
+                      <dl className="space-y-1 rounded-lg border p-3 text-sm">
+                        {shipment.courier_name && (
+                          <div>
+                            <dt className="text-muted-foreground">Courier</dt>
+                            <dd>{shipment.courier_name}</dd>
+                          </div>
+                        )}
+                        {shipment.awb_code && (
+                          <div>
+                            <dt className="text-muted-foreground">AWB</dt>
+                            <dd className="font-mono">{shipment.awb_code}</dd>
+                          </div>
+                        )}
+                        {shipment.origin && (
+                          <div>
+                            <dt className="text-muted-foreground">Origin</dt>
+                            <dd>{shipment.origin}</dd>
+                          </div>
+                        )}
+                        {shipment.destination && (
+                          <div>
+                            <dt className="text-muted-foreground">Destination</dt>
+                            <dd>{shipment.destination}</dd>
+                          </div>
+                        )}
+                        {(td.etd || shipment.etd || shipment.delivered_date) && (
+                          <div>
+                            <dt className="text-muted-foreground">
+                              {shipment.delivered_date ? "Delivered" : "Est. delivery"}
+                            </dt>
+                            <dd>
+                              {shipment.delivered_date ??
+                                td.etd ??
+                                shipment.etd}
+                            </dd>
+                          </div>
+                        )}
+                      </dl>
+                    )}
+
+                    {td.shipment_track_activities &&
+                      td.shipment_track_activities.length > 0 && (
+                        <div className="space-y-2">
+                          <h4 className="font-medium text-sm">Timeline</h4>
+                          <div className="relative space-y-0">
+                            {(td.shipment_track_activities as Array<{
+                              date: string;
+                              activity: string;
+                              location: string;
+                            }>)
+                              .slice()
+                              .sort(
+                                (a, b) =>
+                                  new Date(a.date).getTime() -
+                                  new Date(b.date).getTime()
+                              )
+                              .map((act, i) => (
+                                <div
+                                  key={i}
+                                  className="relative flex gap-3 pb-4 last:pb-0"
+                                >
+                                  {i <
+                                    td.shipment_track_activities!.length - 1 && (
+                                    <div className="absolute left-[5px] top-5 h-full w-px bg-border" />
+                                  )}
+                                  <div className="relative z-10 mt-0.5 size-2.5 shrink-0 rounded-full bg-primary" />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-muted-foreground text-xs">
+                                      {formatDate(act.date)}
+                                    </p>
+                                    <p className="text-sm font-medium">
+                                      {act.activity}
+                                    </p>
+                                    {act.location && act.location !== "NA" && (
+                                      <p className="text-muted-foreground text-xs">
+                                        {act.location}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+
+                    <Collapsible
+                      open={debugOpen}
+                      onOpenChange={setDebugOpen}
+                    >
+                      <CollapsibleTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-between"
+                        >
+                          Debug (raw JSON)
+                          <ChevronDownIcon
+                            className={`size-4 transition-transform ${debugOpen ? "rotate-180" : ""}`}
+                          />
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <pre className="mt-2 max-h-48 overflow-auto rounded bg-muted p-3 text-xs">
+                          {JSON.stringify(trackingData, null, 2)}
+                        </pre>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </>
+                );
+              })()}
+            </div>
           ) : null}
         </SheetContent>
       </Sheet>
