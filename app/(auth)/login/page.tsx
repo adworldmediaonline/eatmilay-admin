@@ -54,7 +54,7 @@ export default function LoginPage() {
       return;
     }
     if (data) {
-      router.push("/dashboard");
+      router.push("/");
       router.refresh();
     }
   }

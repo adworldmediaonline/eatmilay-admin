@@ -159,27 +159,29 @@ export default function SignUpPage() {
               <p className="text-sm text-amber-900 dark:text-amber-100">
                 An account with this email already exists. If you haven&apos;t verified yet, we can send you a new verification code.
               </p>
-              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={resendLoading}
-                  onClick={handleSendVerificationCode}
-                >
-                  {resendLoading ? "Sending..." : "Send verification code"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={resendLoading}
-                  onClick={handleDismissUserExistsFlow}
-                >
-                  Try different email
-                </Button>
+              <div className="mt-4 flex flex-col gap-3">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={resendLoading}
+                    onClick={handleSendVerificationCode}
+                  >
+                    {resendLoading ? "Sending..." : "Send verification code"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={resendLoading}
+                    onClick={handleDismissUserExistsFlow}
+                  >
+                    Try different email
+                  </Button>
+                </div>
                 <Link
                   href="/login"
-                  className="text-center text-sm text-primary underline-offset-4 hover:underline"
+                  className="text-sm text-primary underline-offset-4 hover:underline"
                 >
                   Already verified? Sign in
                 </Link>

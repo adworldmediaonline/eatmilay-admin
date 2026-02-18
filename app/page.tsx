@@ -19,7 +19,7 @@ async function getSession() {
 export default async function HomePage() {
   const session = await getSession();
   if (session?.user) {
-    redirect(isAdminRole(session.user.role) ? "/admin" : "/dashboard");
+    redirect(isAdminRole(session.user.role) ? "/admin" : "/login");
   }
   redirect("/login");
 }

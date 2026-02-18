@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AdminShell } from "@/components/admin-shell";
@@ -17,7 +18,7 @@ async function getSession() {
   return res.json();
 }
 
-export default async function AdminLayout({
+async function AdminLayoutContent({
   children,
 }: {
   children: React.ReactNode;
@@ -27,9 +28,22 @@ export default async function AdminLayout({
     redirect("/login");
   }
 
-  if (!isAdminRole(session.user.role)) {
-    redirect("/dashboard");
+  const role = session.user?.role ?? "user";
+  if (!isAdminRole(role)) {
+    redirect("/login");
   }
 
   return <AdminShell session={session}>{children}</AdminShell>;
+}
+
+export default function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <Suspense fallback={<div className="flex min-h-svh items-center justify-center">Loading...</div>}>
+      <AdminLayoutContent>{children}</AdminLayoutContent>
+    </Suspense>
+  );
 }
