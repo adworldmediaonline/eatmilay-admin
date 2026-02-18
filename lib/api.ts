@@ -762,6 +762,27 @@ export async function createProduct(data: ProductCreateInput): Promise<Product> 
   return res.json();
 }
 
+export type ImportProductsResult = {
+  created: number;
+  failed: number;
+  total: number;
+  errors: Array<{ row: number; message: string }>;
+};
+
+export async function importProducts(
+  content: string
+): Promise<ImportProductsResult> {
+  const res = await fetchWithAuth(`${apiUrl}/api/admin/products/import`, {
+    method: "POST",
+    body: JSON.stringify({ content }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error ?? "Failed to import products");
+  }
+  return data;
+}
+
 export type ProductUpdateInput = Partial<{
   name: string;
   slug: string;

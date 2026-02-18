@@ -65,6 +65,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   PlusIcon,
+  UploadIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -494,6 +495,12 @@ export default function ProductsPage() {
             >
               <DownloadIcon className="size-4" />
               Download Products
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/admin/products/import">
+                <UploadIcon className="size-4" />
+                Import CSV
+              </Link>
             </Button>
             <Button asChild>
               <Link href="/admin/products/new">
