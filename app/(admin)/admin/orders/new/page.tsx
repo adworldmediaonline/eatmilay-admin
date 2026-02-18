@@ -90,8 +90,8 @@ export default function NewOrderPage() {
   }, [items]);
 
   useEffect(() => {
-    getProducts({ status: "published" })
-      .then(setProducts)
+    getProducts({ status: "published", limit: 10000 })
+      .then((data) => setProducts(data.items))
       .catch(() => toast.error("Failed to load products"))
       .finally(() => setLoading(false));
   }, []);

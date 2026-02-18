@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   getProductCollections,
   createProductCollection,
@@ -47,12 +47,27 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import Image from "next/image";
-import { PlusIcon, PencilIcon, Trash2Icon, Loader2Icon } from "lucide-react";
+import {
+  PlusIcon,
+  PencilIcon,
+  Trash2Icon,
+  Loader2Icon,
+  SearchIcon,
+  ImageIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+} from "lucide-react";
 import { toast } from "sonner";
+
+const PAGE_SIZES = [10, 20, 50] as const;
+type SortBy = "name" | "slug" | "createdAt" | "updatedAt";
+type SortOrder = "asc" | "desc";
 
 export default function ProductCollectionsPage() {
   const [collections, setCollections] = useState<ProductCollection[]>([]);
+  const [total, setTotal] = useState(0);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -61,6 +76,13 @@ export default function ProductCollectionsPage() {
   const [editing, setEditing] = useState<ProductCollection | null>(null);
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [newProductId, setNewProductId] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<SortBy>("createdAt");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const abortRef = useRef<AbortController | null>(null);
   const [form, setForm] = useState<{
     name: string;
     slug: string;
@@ -75,24 +97,52 @@ export default function ProductCollectionsPage() {
     productIds: [],
   });
 
-  const loadCollections = async () => {
+  const loadCollections = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const signal = controller.signal;
+    setLoading(true);
     try {
-      const data = await getProductCollections();
-      setCollections(data);
-    } catch {
+      const params: Parameters<typeof getProductCollections>[0] = {
+        sortBy,
+        sortOrder,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+        signal,
+      };
+      if (searchQuery.trim()) params.search = searchQuery.trim();
+
+      const data = await getProductCollections(params);
+      if (signal.aborted) return;
+      setCollections(data.items);
+      setTotal(data.total);
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       toast.error("Failed to load collections");
     } finally {
-      setLoading(false);
+      if (!signal.aborted) setLoading(false);
     }
-  };
+  }, [searchQuery, sortBy, sortOrder, page, pageSize]);
 
   useEffect(() => {
     loadCollections();
-  }, []);
+  }, [loadCollections]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setSearchQuery(searchInput), 200);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, sortBy, sortOrder, pageSize]);
 
   useEffect(() => {
     if (sheetOpen) {
-      getProducts().then(setProducts).catch(() => []);
+      getProducts({ limit: 10000 })
+        .then((d) => setProducts(d.items))
+        .catch(() => []);
     }
   }, [sheetOpen]);
 
@@ -188,6 +238,42 @@ export default function ProductCollectionsPage() {
     }
   };
 
+  const handleSort = (field: SortBy) => {
+    if (sortBy === field) {
+      setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(field);
+      setSortOrder("asc");
+    }
+    setPage(1);
+  };
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const startItem = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endItem = Math.min(page * pageSize, total);
+
+  const SortHeader = ({
+    field,
+    label,
+  }: {
+    field: SortBy;
+    label: string;
+  }) => (
+    <TableHead
+      className="cursor-pointer select-none hover:bg-muted/50"
+      onClick={() => handleSort(field)}
+    >
+      <div className="flex items-center gap-1">
+        {label}
+        {sortBy === field && (
+          <span className="text-muted-foreground">
+            {sortOrder === "asc" ? "↑" : "↓"}
+          </span>
+        )}
+      </div>
+    </TableHead>
+  );
+
   const availableProducts = products.filter((p) => !form.productIds.includes(p.id));
 
   return (
@@ -200,11 +286,21 @@ export default function ProductCollectionsPage() {
               Group products (e.g. Summer collection, Best sellers)
             </p>
           </div>
-          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-            <Button onClick={openCreate}>
-              <PlusIcon className="size-4" />
-              Add collection
-            </Button>
+          <div className="flex flex-wrap gap-2">
+            <div className="relative flex-1 min-w-[200px] sm:max-w-[280px]">
+              <SearchIcon className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search by name or slug..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+              <Button onClick={openCreate}>
+                <PlusIcon className="size-4" />
+                Add collection
+              </Button>
             <SheetContent className="overflow-y-auto">
               <SheetHeader>
                 <SheetTitle>
@@ -359,22 +455,12 @@ export default function ProductCollectionsPage() {
                 </Button>
               </form>
             </SheetContent>
-          </Sheet>
+            </Sheet>
+          </div>
         </div>
 
         <div className="px-4 lg:px-6">
           {loading ? (
-            <div className="rounded-lg border p-8 text-center text-muted-foreground">
-              Loading...
-            </div>
-          ) : collections.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
-              <p className="text-sm">No collections yet.</p>
-              <Button variant="outline" className="mt-4" onClick={openCreate}>
-                Add your first collection
-              </Button>
-            </div>
-          ) : (
             <div className="rounded-lg border">
               <Table>
                 <TableHeader>
@@ -387,21 +473,84 @@ export default function ProductCollectionsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {collections.map((col) => (
-                    <TableRow key={col.id}>
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <TableRow key={i}>
                       <TableCell>
-                        {col.image?.url ? (
-                          <Image
-                            src={col.image.url}
-                            alt={col.image.alt || col.image.title || col.name}
-                            width={48}
-                            height={48}
-                            className="size-12 rounded-md object-cover"
-                          />
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        )}
+                        <Skeleton className="size-12 rounded-md" />
                       </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-32" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-24" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-16" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-8 w-20 rounded" />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : collections.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
+              <p className="text-sm">
+                {searchQuery
+                  ? "No collections match your search."
+                  : "No collections yet."}
+              </p>
+              {searchQuery ? (
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => {
+                    setSearchInput("");
+                    setSearchQuery("");
+                    setPage(1);
+                  }}
+                >
+                  Clear search
+                </Button>
+              ) : (
+                <Button variant="outline" className="mt-4" onClick={openCreate}>
+                  Add your first collection
+                </Button>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[64px]">Image</TableHead>
+                      <SortHeader field="name" label="Name" />
+                      <SortHeader field="slug" label="Slug" />
+                      <TableHead>Products</TableHead>
+                      <TableHead className="w-[100px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {collections.map((col) => (
+                      <TableRow key={col.id}>
+                        <TableCell>
+                          {col.image?.url ? (
+                            <Image
+                              src={col.image.url}
+                              alt={col.image.alt || col.image.title || col.name}
+                              width={48}
+                              height={48}
+                              className="size-12 rounded-md object-cover"
+                            />
+                          ) : (
+                            <div className="flex size-12 items-center justify-center rounded-md border bg-muted/50">
+                              <ImageIcon className="size-5 text-muted-foreground" />
+                            </div>
+                          )}
+                        </TableCell>
                       <TableCell className="font-medium">{col.name}</TableCell>
                       <TableCell className="text-muted-foreground font-mono text-sm">
                         {col.slug}
@@ -433,6 +582,61 @@ export default function ProductCollectionsPage() {
                 </TableBody>
               </Table>
             </div>
+
+            <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-muted-foreground text-sm">
+                Showing {startItem}–{endItem} of {total} collections
+              </p>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground text-sm">
+                    Rows per page
+                  </span>
+                  <Select
+                    value={String(pageSize)}
+                    onValueChange={(v) => {
+                      setPageSize(Number(v));
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-[70px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAGE_SIZES.map((s) => (
+                        <SelectItem key={s} value={String(s)}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronLeftIcon className="size-4" />
+                  </Button>
+                  <span className="text-muted-foreground min-w-[100px] text-center text-sm">
+                    Page {page} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    disabled={page >= totalPages}
+                    onClick={() =>
+                      setPage((p) => Math.min(totalPages, p + 1))
+                    }
+                  >
+                    <ChevronRightIcon className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+            </>
           )}
         </div>
       </div>

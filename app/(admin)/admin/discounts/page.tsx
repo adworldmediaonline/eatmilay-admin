@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   getDiscounts,
   getProducts,
@@ -44,7 +44,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { PlusIcon, PencilIcon, Trash2Icon, Loader2Icon } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  PlusIcon,
+  PencilIcon,
+  Trash2Icon,
+  Loader2Icon,
+  SearchIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export default function DiscountsPage() {
@@ -75,25 +84,63 @@ export default function DiscountsPage() {
     status: "active",
   });
   const [newProductId, setNewProductId] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<"code" | "createdAt" | "updatedAt" | "status">("createdAt");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
+  const abortRef = useRef<AbortController | null>(null);
 
-  const loadDiscounts = async () => {
+  const loadDiscounts = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const signal = controller.signal;
+    setLoading(true);
     try {
-      const data = await getDiscounts();
-      setDiscounts(data);
-    } catch {
+      const params: Parameters<typeof getDiscounts>[0] = {
+        sortBy,
+        sortOrder,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+        signal,
+      };
+      if (statusFilter && statusFilter !== "all") params.status = statusFilter;
+      if (searchQuery.trim()) params.search = searchQuery.trim();
+
+      const data = await getDiscounts(params);
+      if (signal.aborted) return;
+      setDiscounts(data.items);
+      setTotal(data.total);
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       toast.error("Failed to load discounts");
     } finally {
-      setLoading(false);
+      if (!signal.aborted) setLoading(false);
     }
-  };
+  }, [statusFilter, searchQuery, sortBy, sortOrder, page, pageSize]);
 
   useEffect(() => {
     loadDiscounts();
-  }, []);
+  }, [loadDiscounts]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setSearchQuery(searchInput), 200);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, statusFilter, sortBy, sortOrder, pageSize]);
 
   useEffect(() => {
     if (sheetOpen) {
-      getProducts().then(setProducts).catch(() => []);
+      getProducts({ limit: 10000 })
+        .then((data) => setProducts(data.items))
+        .catch(() => []);
     }
   }, [sheetOpen]);
 
@@ -220,7 +267,45 @@ export default function DiscountsPage() {
     });
   };
 
+  const handleSort = (field: "code" | "createdAt" | "updatedAt" | "status") => {
+    if (sortBy === field) {
+      setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(field);
+      setSortOrder("asc");
+    }
+    setPage(1);
+  };
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const startItem = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endItem = Math.min(page * pageSize, total);
+
+  const SortHeader = ({
+    field,
+    label,
+  }: {
+    field: "code" | "createdAt" | "updatedAt" | "status";
+    label: string;
+  }) => (
+    <TableHead
+      className="cursor-pointer select-none hover:bg-muted/50"
+      onClick={() => handleSort(field)}
+    >
+      <div className="flex items-center gap-1">
+        {label}
+        {sortBy === field && (
+          <span className="text-muted-foreground">
+            {sortOrder === "asc" ? "↑" : "↓"}
+          </span>
+        )}
+      </div>
+    </TableHead>
+  );
+
   const availableProducts = products.filter((p) => !form.productIds.includes(p.id));
+
+  const PAGE_SIZES = [10, 20, 50] as const;
 
   return (
     <div className="flex flex-1 flex-col gap-2">
@@ -232,11 +317,31 @@ export default function DiscountsPage() {
               Promo codes and coupons
             </p>
           </div>
-          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-            <Button onClick={openCreate}>
-              <PlusIcon className="size-4" />
-              Add discount
-            </Button>
+          <div className="flex flex-wrap gap-2">
+            <div className="relative flex-1 min-w-[200px] sm:max-w-[280px]">
+              <SearchIcon className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search by code..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[120px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="disabled">Disabled</SelectItem>
+              </SelectContent>
+            </Select>
+            <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+              <Button onClick={openCreate}>
+                <PlusIcon className="size-4" />
+                Add discount
+              </Button>
             <SheetContent className="overflow-y-auto">
               <SheetHeader>
                 <SheetTitle>
@@ -428,22 +533,12 @@ export default function DiscountsPage() {
                 </Button>
               </form>
             </SheetContent>
-          </Sheet>
+            </Sheet>
+          </div>
         </div>
 
         <div className="px-4 lg:px-6">
           {loading ? (
-            <div className="rounded-lg border p-8 text-center text-muted-foreground">
-              Loading...
-            </div>
-          ) : discounts.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
-              <p className="text-sm">No discounts yet.</p>
-              <Button variant="outline" className="mt-4" onClick={openCreate}>
-                Add your first discount
-              </Button>
-            </div>
-          ) : (
             <div className="rounded-lg border">
               <Table>
                 <TableHeader>
@@ -457,6 +552,76 @@ export default function DiscountsPage() {
                     <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
+                <TableBody>
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell>
+                        <Skeleton className="h-4 w-20" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-16" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-12" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-12" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-12" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-20" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-8 w-20 rounded" />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : discounts.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
+              <p className="text-sm">
+                {searchQuery || statusFilter !== "all"
+                  ? "No discounts match your filters."
+                  : "No discounts yet."}
+              </p>
+              {searchQuery || statusFilter !== "all" ? (
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => {
+                    setSearchInput("");
+                    setSearchQuery("");
+                    setStatusFilter("all");
+                    setPage(1);
+                  }}
+                >
+                  Clear filters
+                </Button>
+              ) : (
+                <Button variant="outline" className="mt-4" onClick={openCreate}>
+                  Add your first discount
+                </Button>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <SortHeader field="code" label="Code" />
+                      <TableHead>Type</TableHead>
+                      <TableHead>Value</TableHead>
+                      <TableHead>Usage</TableHead>
+                      <SortHeader field="status" label="Status" />
+                      <TableHead>Expires</TableHead>
+                      <TableHead className="w-[100px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
                 <TableBody>
                   {discounts.map((d) => (
                     <TableRow key={d.id}>
@@ -505,6 +670,61 @@ export default function DiscountsPage() {
                 </TableBody>
               </Table>
             </div>
+
+            <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-muted-foreground text-sm">
+                Showing {startItem}–{endItem} of {total} discounts
+              </p>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground text-sm">
+                    Rows per page
+                  </span>
+                  <Select
+                    value={String(pageSize)}
+                    onValueChange={(v) => {
+                      setPageSize(Number(v));
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-[70px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAGE_SIZES.map((s) => (
+                        <SelectItem key={s} value={String(s)}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronLeftIcon className="size-4" />
+                  </Button>
+                  <span className="text-muted-foreground min-w-[100px] text-center text-sm">
+                    Page {page} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    disabled={page >= totalPages}
+                    onClick={() =>
+                      setPage((p) => Math.min(totalPages, p + 1))
+                    }
+                  >
+                    <ChevronRightIcon className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+            </>
           )}
         </div>
       </div>
