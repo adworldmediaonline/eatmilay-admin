@@ -1,8 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { getProducts, deleteProduct, type Product } from "@/lib/api";
+import {
+  getProducts,
+  getProductCategories,
+  deleteProduct,
+  duplicateProduct,
+  type Product,
+  type ProductCategory,
+} from "@/lib/api";
 import {
   getProductStockStatus,
   getStockStatusLabel,
@@ -18,6 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -25,6 +33,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,69 +50,177 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import Image from "next/image";
-import { DownloadIcon, EyeIcon, PlusIcon, Trash2Icon, Loader2Icon } from "lucide-react";
+import {
+  DownloadIcon,
+  EyeIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  CopyIcon,
+  Trash2Icon,
+  Loader2Icon,
+  SearchIcon,
+  ImageIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  PlusIcon,
+} from "lucide-react";
 import { toast } from "sonner";
+
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  INR: "₹",
+};
+
+function formatPrice(amount: number, currency: string): string {
+  const sym = CURRENCY_SYMBOLS[currency] ?? currency + " ";
+  return `${sym}${amount.toFixed(2)}`;
+}
+
+function getDisplayStockQty(product: Product): number {
+  if (product.productType === "variable" && (product.variants?.length ?? 0) > 0) {
+    return (product.variants ?? []).reduce(
+      (sum, v) => sum + (v.stockQuantity ?? 0),
+      0
+    );
+  }
+  return product.stockQuantity ?? 0;
+}
+
+const PAGE_SIZES = [10, 20, 50] as const;
+
+type SortBy = "name" | "price" | "updatedAt" | "stockQuantity";
+type SortOrder = "asc" | "desc";
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<SortBy>("updatedAt");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
 
-  const loadProducts = async () => {
+  const loadProducts = useCallback(async () => {
+    setLoading(true);
     try {
-      const params =
-        statusFilter && statusFilter !== "all"
-          ? { status: statusFilter }
-          : undefined;
+      const params: Parameters<typeof getProducts>[0] = {
+        sortBy,
+        sortOrder,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      };
+      if (statusFilter && statusFilter !== "all") params.status = statusFilter;
+      if (categoryFilter && categoryFilter !== "all")
+        params.categoryId = categoryFilter;
+      if (searchQuery.trim()) params.search = searchQuery.trim();
+
       const data = await getProducts(params);
-      setProducts(data);
+      setProducts(data.items);
+      setTotal(data.total);
     } catch {
       toast.error("Failed to load products");
     } finally {
       setLoading(false);
     }
+  }, [statusFilter, categoryFilter, searchQuery, sortBy, sortOrder, page, pageSize]);
+
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
+
+  useEffect(() => {
+    getProductCategories().then(setCategories).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => setSearchQuery(searchInput), 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, statusFilter, categoryFilter, sortBy, sortOrder, pageSize]);
+
+  const handleSort = (field: SortBy) => {
+    if (sortBy === field) {
+      setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(field);
+      setSortOrder("asc");
+    }
+    setPage(1);
   };
 
-  const downloadProducts = () => {
-    if (products.length === 0) {
-      toast.error("No products to download");
-      return;
-    }
-    const frontendUrl =
-      (process.env.NEXT_PUBLIC_FRONTEND_USER_URL ?? "").replace(/\/$/, "") ||
-      "https://www.eatmilay.com";
-    const headers = ["Product Name", "Product URL", "Price", "Images", "SKU"];
-    const escapeCsv = (val: string): string => {
-      const str = String(val ?? "");
-      if (str.includes(",") || str.includes('"') || str.includes("\n")) {
-        return `"${str.replace(/"/g, '""')}"`;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const startItem = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endItem = Math.min(page * pageSize, total);
+
+  const downloadProducts = async () => {
+    try {
+      const params: Parameters<typeof getProducts>[0] = {
+        sortBy,
+        sortOrder,
+        limit: 10000,
+        offset: 0,
+      };
+      if (statusFilter && statusFilter !== "all") params.status = statusFilter;
+      if (categoryFilter && categoryFilter !== "all")
+        params.categoryId = categoryFilter;
+      if (searchQuery.trim()) params.search = searchQuery.trim();
+
+      const data = await getProducts(params);
+      const toExport = data.items;
+      if (toExport.length === 0) {
+        toast.error("No products to download");
+        return;
       }
-      return str;
-    };
-    const rows = products.map((p) => [
-      escapeCsv(p.name),
-      escapeCsv(`${frontendUrl}/products/${p.slug}`),
-      escapeCsv(String(p.price)),
-      escapeCsv(
-        (p.images ?? [])
-          .map((img) => img.url)
-          .filter(Boolean)
-          .join(" | ")
-      ),
-      escapeCsv(p.sku ?? ""),
-    ]);
-    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `products-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Products downloaded");
+      const frontendUrl =
+        (process.env.NEXT_PUBLIC_FRONTEND_USER_URL ?? "").replace(/\/$/, "") ||
+        "https://www.eatmilay.com";
+      const headers = ["Product Name", "Product URL", "Price", "Images", "SKU"];
+      const escapeCsv = (val: string): string => {
+        const str = String(val ?? "");
+        if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+      const rows = toExport.map((p) => [
+        escapeCsv(p.name),
+        escapeCsv(`${frontendUrl}/products/${p.slug}`),
+        escapeCsv(String(p.price)),
+        escapeCsv(
+          (p.images ?? [])
+            .map((img) => img.url)
+            .filter(Boolean)
+            .join(" | ")
+        ),
+        escapeCsv(p.sku ?? ""),
+      ]);
+      const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `products-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Products downloaded");
+    } catch {
+      toast.error("Failed to download products");
+    }
   };
 
   const handleDelete = async () => {
@@ -115,9 +238,40 @@ export default function ProductsPage() {
     }
   };
 
-  useEffect(() => {
-    loadProducts();
-  }, [statusFilter]);
+  const handleDuplicate = async (id: string) => {
+    setDuplicatingId(id);
+    try {
+      await duplicateProduct(id);
+      toast.success("Product duplicated");
+      loadProducts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to duplicate");
+    } finally {
+      setDuplicatingId(null);
+    }
+  };
+
+  const SortHeader = ({
+    field,
+    label,
+  }: {
+    field: SortBy;
+    label: string;
+  }) => (
+    <TableHead
+      className="cursor-pointer select-none hover:bg-muted/50"
+      onClick={() => handleSort(field)}
+    >
+      <div className="flex items-center gap-1">
+        {label}
+        {sortBy === field && (
+          <span className="text-muted-foreground">
+            {sortOrder === "asc" ? "↑" : "↓"}
+          </span>
+        )}
+      </div>
+    </TableHead>
+  );
 
   return (
     <div className="flex flex-1 flex-col gap-2">
@@ -129,11 +283,17 @@ export default function ProductsPage() {
               Manage your store products
             </p>
           </div>
-          <div className="flex gap-2">
-            <Select
-              value={statusFilter}
-              onValueChange={setStatusFilter}
-            >
+          <div className="flex flex-wrap gap-2">
+            <div className="relative flex-1 min-w-[200px] sm:max-w-[280px]">
+              <SearchIcon className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search by name, slug, or SKU..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -143,10 +303,23 @@ export default function ProductsPage() {
                 <SelectItem value="published">Published</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {categories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               variant="outline"
               onClick={downloadProducts}
-              disabled={loading || products.length === 0}
+              disabled={loading || total === 0}
             >
               <DownloadIcon className="size-4" />
               Download Products
@@ -162,17 +335,6 @@ export default function ProductsPage() {
 
         <div className="px-4 lg:px-6">
           {loading ? (
-            <div className="rounded-lg border p-8 text-center text-muted-foreground">
-              Loading...
-            </div>
-          ) : products.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
-              <p className="text-sm">No products yet.</p>
-              <Button variant="outline" className="mt-4" asChild>
-                <Link href="/admin/products/new">Add your first product</Link>
-              </Button>
-            </div>
-          ) : (
             <div className="rounded-lg border">
               <Table>
                 <TableHeader>
@@ -187,108 +349,307 @@ export default function ProductsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {products.map((product) => (
-                    <TableRow key={product.id}>
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <TableRow key={i}>
                       <TableCell>
-                        {product.images?.[0]?.url ? (
-                          <Image
-                            src={product.images[0].url}
-                            alt={product.images[0].alt || product.images[0].title || product.name}
-                            width={48}
-                            height={48}
-                            className="size-12 rounded-md object-cover"
-                          />
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {product.name}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {product.categoryName ?? "—"}
+                        <Skeleton className="size-12 rounded-md" />
                       </TableCell>
                       <TableCell>
-                        ${product.price.toFixed(2)}
-                        {product.compareAtPrice && (
-                          <span className="text-muted-foreground ml-1 text-sm line-through">
-                            ${product.compareAtPrice.toFixed(2)}
-                          </span>
-                        )}
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="mt-1 h-3 w-16" />
                       </TableCell>
                       <TableCell>
-                        {(() => {
-                          const status = getProductStockStatus(product);
-                          const variantMap: Record<
-                            StockStatus,
-                            "default" | "secondary" | "destructive" | "outline"
-                          > = {
-                            in_stock: "default",
-                            low_stock: "outline",
-                            out_of_stock: "destructive",
-                            backorder: "secondary",
-                          };
-                          return (
-                            <Badge variant={variantMap[status]}>
-                              {getStockStatusLabel(status)}
-                            </Badge>
-                          );
-                        })()}
+                        <Skeleton className="h-4 w-24" />
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          <Badge
-                            variant={
-                              product.status === "published"
-                                ? "default"
-                                : "secondary"
-                            }
-                          >
-                            {product.status}
-                          </Badge>
-                          {product.productType && product.productType !== "simple" && (
-                            <Badge variant="outline" className="capitalize">
-                              {product.productType}
-                            </Badge>
-                          )}
-                        </div>
+                        <Skeleton className="h-4 w-16" />
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="icon" asChild>
-                            <Link
-                              href={`/admin/products/${product.id}/preview`}
-                              title="Preview"
-                            >
-                              <EyeIcon className="size-4" />
-                            </Link>
-                          </Button>
-                          <Button variant="ghost" size="sm" asChild>
-                            <Link href={`/admin/products/${product.id}`}>
-                              Edit
-                            </Link>
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => setDeleteId(product.id)}
-                            title="Delete"
-                          >
-                            <Trash2Icon className="size-4" />
-                          </Button>
-                        </div>
+                        <Skeleton className="h-5 w-20 rounded-full" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-8 w-8 rounded" />
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
+          ) : products.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
+              <p className="text-sm">
+                {searchQuery || statusFilter !== "all" || categoryFilter !== "all"
+                  ? `No products match your filters.`
+                  : "No products yet."}
+              </p>
+              {searchQuery ||
+              statusFilter !== "all" ||
+              categoryFilter !== "all" ? (
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => {
+                    setSearchInput("");
+                    setSearchQuery("");
+                    setStatusFilter("all");
+                    setCategoryFilter("all");
+                    setPage(1);
+                  }}
+                >
+                  Clear filters
+                </Button>
+              ) : (
+                <Button variant="outline" className="mt-4" asChild>
+                  <Link href="/admin/products/new">Add your first product</Link>
+                </Button>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[64px]">Image</TableHead>
+                      <SortHeader field="name" label="Name" />
+                      <TableHead>Category</TableHead>
+                      <SortHeader field="price" label="Price" />
+                      <SortHeader field="stockQuantity" label="Stock" />
+                      <TableHead>Status</TableHead>
+                      <SortHeader field="updatedAt" label="Updated" />
+                      <TableHead className="w-[80px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {products.map((product) => (
+                      <TableRow key={product.id}>
+                        <TableCell>
+                          {product.images?.[0]?.url ? (
+                            <Image
+                              src={product.images[0].url}
+                              alt={
+                                product.images[0].alt ||
+                                product.images[0].title ||
+                                product.name
+                              }
+                              width={48}
+                              height={48}
+                              className="size-12 rounded-md object-cover"
+                            />
+                          ) : (
+                            <div className="flex size-12 items-center justify-center rounded-md border bg-muted/50">
+                              <ImageIcon className="size-5 text-muted-foreground" />
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
+                            <Link
+                              href={`/admin/products/${product.id}`}
+                              className="font-medium hover:underline"
+                            >
+                              {product.name}
+                            </Link>
+                            {product.sku && (
+                              <Badge
+                                variant="secondary"
+                                className="w-fit text-xs font-normal"
+                              >
+                                {product.sku}
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {product.categoryName ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          {formatPrice(
+                            product.price,
+                            product.currency ?? "USD"
+                          )}
+                          {product.compareAtPrice && (
+                            <span className="text-muted-foreground ml-1 text-sm line-through">
+                              {formatPrice(
+                                product.compareAtPrice,
+                                product.currency ?? "USD"
+                              )}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const status = getProductStockStatus(product);
+                            const qty = getDisplayStockQty(product);
+                            const variantMap: Record<
+                              StockStatus,
+                              "default" | "secondary" | "destructive" | "outline"
+                            > = {
+                              in_stock: "default",
+                              low_stock: "outline",
+                              out_of_stock: "destructive",
+                              backorder: "secondary",
+                            };
+                            const label = getStockStatusLabel(status);
+                            const showQty =
+                              product.trackInventory !== false && qty >= 0;
+                            return (
+                              <Badge variant={variantMap[status]}>
+                                {showQty ? `${label} (${qty})` : label}
+                              </Badge>
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            <Badge
+                              variant={
+                                product.status === "published"
+                                  ? "default"
+                                  : "secondary"
+                              }
+                            >
+                              {product.status}
+                            </Badge>
+                            {product.productType &&
+                              product.productType !== "simple" && (
+                                <Badge
+                                  variant="outline"
+                                  className="capitalize"
+                                >
+                                  {product.productType}
+                                </Badge>
+                              )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-muted-foreground text-sm">
+                            {product.updatedAt
+                              ? new Date(
+                                  product.updatedAt
+                                ).toLocaleDateString(undefined, {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                })
+                              : "—"}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontalIcon className="size-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem asChild>
+                                <Link href={`/admin/products/${product.id}`}>
+                                  <PencilIcon className="size-4" />
+                                  Edit
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <Link
+                                  href={`/admin/products/${product.id}/preview`}
+                                >
+                                  <EyeIcon className="size-4" />
+                                  Preview
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleDuplicate(product.id)}
+                                disabled={duplicatingId === product.id}
+                              >
+                                {duplicatingId === product.id ? (
+                                  <Loader2Icon className="size-4 animate-spin" />
+                                ) : (
+                                  <CopyIcon className="size-4" />
+                                )}
+                                Duplicate
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={() => setDeleteId(product.id)}
+                              >
+                                <Trash2Icon className="size-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-muted-foreground text-sm">
+                  Showing {startItem}–{endItem} of {total} products
+                </p>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground text-sm">
+                      Rows per page
+                    </span>
+                    <Select
+                      value={String(pageSize)}
+                      onValueChange={(v) => {
+                        setPageSize(Number(v));
+                        setPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="w-[70px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PAGE_SIZES.map((s) => (
+                          <SelectItem key={s} value={String(s)}>
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      disabled={page <= 1}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    >
+                      <ChevronLeftIcon className="size-4" />
+                    </Button>
+                    <span className="text-muted-foreground min-w-[100px] text-center text-sm">
+                      Page {page} of {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      disabled={page >= totalPages}
+                      onClick={() =>
+                        setPage((p) => Math.min(totalPages, p + 1))
+                      }
+                    >
+                      <ChevronRightIcon className="size-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>
 
-      <AlertDialog open={!!deleteId} onOpenChange={() => !deleting && setDeleteId(null)}>
+      <AlertDialog
+        open={!!deleteId}
+        onOpenChange={() => !deleting && setDeleteId(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete product?</AlertDialogTitle>

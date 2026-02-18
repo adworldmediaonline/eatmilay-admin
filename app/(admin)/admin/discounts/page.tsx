@@ -93,7 +93,9 @@ export default function DiscountsPage() {
 
   useEffect(() => {
     if (sheetOpen) {
-      getProducts().then(setProducts).catch(() => []);
+      getProducts({ limit: 10000 })
+        .then((data) => setProducts(data.items))
+        .catch(() => []);
     }
   }, [sheetOpen]);
 

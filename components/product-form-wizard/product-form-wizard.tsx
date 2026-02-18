@@ -14,6 +14,7 @@ import {
   getProducts,
   checkSlugAvailability,
   duplicateProduct,
+  type Product,
   type ProductCategory,
   type ProductImage,
   type ProductOption,
@@ -126,7 +127,7 @@ export function ProductFormWizard({
   );
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [products, setProducts] = useState<Awaited<ReturnType<typeof getProducts>>>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [productType, setProductType] = useState<"simple" | "variable" | "bundle">(
     initialData?.productType ?? "simple"
   );
@@ -235,7 +236,9 @@ export function ProductFormWizard({
 
   useEffect(() => {
     if (step === 3 || productType === "bundle") {
-      getProducts().then(setProducts).catch(() => {});
+      getProducts({ limit: 10000 })
+        .then((data) => setProducts(data.items))
+        .catch(() => {});
     }
   }, [step, productType]);
 

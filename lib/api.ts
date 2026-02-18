@@ -545,11 +545,33 @@ export type Product = {
   updatedAt: string;
 };
 
-export async function getProducts(params?: {
+export type GetProductsParams = {
   status?: string;
   categoryId?: string;
-}): Promise<Product[]> {
-  const search = new URLSearchParams(params as Record<string, string>).toString();
+  search?: string;
+  sortBy?: "name" | "price" | "updatedAt" | "stockQuantity";
+  sortOrder?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+};
+
+export type GetProductsResponse = {
+  items: Product[];
+  total: number;
+};
+
+export async function getProducts(
+  params?: GetProductsParams
+): Promise<GetProductsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.status) searchParams.set("status", params.status);
+  if (params?.categoryId) searchParams.set("categoryId", params.categoryId);
+  if (params?.search?.trim()) searchParams.set("search", params.search.trim());
+  if (params?.sortBy) searchParams.set("sortBy", params.sortBy);
+  if (params?.sortOrder) searchParams.set("sortOrder", params.sortOrder);
+  if (params?.limit != null) searchParams.set("limit", String(params.limit));
+  if (params?.offset != null) searchParams.set("offset", String(params.offset));
+  const search = searchParams.toString();
   const url = `${apiUrl}/api/admin/products${search ? `?${search}` : ""}`;
   const res = await fetchWithAuth(url);
   if (!res.ok) throw new Error("Failed to fetch products");
