@@ -501,8 +501,10 @@ export type Discount = {
   minOrderAmount: number | null;
   maxUsage: number | null;
   usedCount: number;
+  startsAt: string | null;
   expiresAt: string | null;
-  status: "active" | "disabled";
+  status: "active" | "disabled" | "scheduled";
+  effectiveStatus?: "active" | "disabled" | "scheduled" | "expired";
   createdAt: string;
   updatedAt: string;
 };
@@ -552,8 +554,9 @@ export async function createDiscount(data: {
   productIds?: string[];
   minOrderAmount?: number | null;
   maxUsage?: number | null;
+  startsAt?: string | null;
   expiresAt?: string | null;
-  status?: "active" | "disabled";
+  status?: "active" | "disabled" | "scheduled";
 }): Promise<Discount> {
   const res = await fetchWithAuth(`${apiUrl}/api/admin/discounts`, {
     method: "POST",
@@ -575,8 +578,9 @@ export async function updateDiscount(
     productIds: string[];
     minOrderAmount: number | null;
     maxUsage: number | null;
+    startsAt: string | null;
     expiresAt: string | null;
-    status: "active" | "disabled";
+    status: "active" | "disabled" | "scheduled";
   }>
 ): Promise<Discount> {
   const res = await fetchWithAuth(`${apiUrl}/api/admin/discounts/${id}`, {

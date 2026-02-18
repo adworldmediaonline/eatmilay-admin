@@ -10,6 +10,7 @@ import {
   type Discount,
   type Product,
 } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -71,8 +72,9 @@ export default function DiscountsPage() {
     productIds: string[];
     minOrderAmount: number | null;
     maxUsage: number | null;
+    startsAt: string;
     expiresAt: string;
-    status: "active" | "disabled";
+    status: "active" | "disabled" | "scheduled";
   }>({
     code: "",
     type: "percentage",
@@ -80,6 +82,7 @@ export default function DiscountsPage() {
     productIds: [],
     minOrderAmount: null,
     maxUsage: null,
+    startsAt: "",
     expiresAt: "",
     status: "active",
   });
@@ -154,6 +157,7 @@ export default function DiscountsPage() {
       productIds: [],
       minOrderAmount: null,
       maxUsage: null,
+      startsAt: "",
       expiresAt: "",
       status: "active",
     });
@@ -170,9 +174,8 @@ export default function DiscountsPage() {
       productIds: d.productIds ?? [],
       minOrderAmount: d.minOrderAmount ?? null,
       maxUsage: d.maxUsage ?? null,
-      expiresAt: d.expiresAt
-        ? new Date(d.expiresAt).toISOString().slice(0, 16)
-        : "",
+      startsAt: d.startsAt ? toLocalDatetimeString(d.startsAt) : "",
+      expiresAt: d.expiresAt ? toLocalDatetimeString(d.expiresAt) : "",
       status: d.status,
     });
     setSheetOpen(true);
@@ -214,6 +217,7 @@ export default function DiscountsPage() {
           productIds: form.productIds,
           minOrderAmount: form.minOrderAmount,
           maxUsage: form.maxUsage,
+          startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : null,
           expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
           status: form.status,
         });
@@ -226,6 +230,7 @@ export default function DiscountsPage() {
           productIds: form.productIds,
           minOrderAmount: form.minOrderAmount,
           maxUsage: form.maxUsage,
+          startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : null,
           expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
           status: form.status,
         });
@@ -257,6 +262,17 @@ export default function DiscountsPage() {
     return `$${d.value.toFixed(2)}`;
   };
 
+  /** Format ISO date for datetime-local input (uses local timezone) */
+  const toLocalDatetimeString = (isoString: string): string => {
+    const d = new Date(isoString);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
   const formatExpires = (d: Discount) => {
     if (!d.expiresAt) return "—";
     const date = new Date(d.expiresAt);
@@ -265,6 +281,27 @@ export default function DiscountsPage() {
       month: "short",
       day: "numeric",
     });
+  };
+
+  const getEffectiveStatusBadge = (d: Discount) => {
+    const status = d.effectiveStatus ?? d.status;
+    const variant =
+      status === "active"
+        ? "default"
+        : status === "scheduled"
+          ? "secondary"
+          : status === "expired"
+            ? "destructive"
+            : "outline";
+    const label =
+      status === "active"
+        ? "Active"
+        : status === "scheduled"
+          ? "Scheduled"
+          : status === "expired"
+            ? "Expired"
+            : "Disabled";
+    return { variant, label };
   };
 
   const handleSort = (field: "code" | "createdAt" | "updatedAt" | "status") => {
@@ -334,6 +371,7 @@ export default function DiscountsPage() {
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="scheduled">Scheduled</SelectItem>
                 <SelectItem value="disabled">Disabled</SelectItem>
               </SelectContent>
             </Select>
@@ -437,6 +475,21 @@ export default function DiscountsPage() {
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="startsAt">Starts at (optional)</Label>
+                  <Input
+                    id="startsAt"
+                    type="datetime-local"
+                    value={form.startsAt}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, startsAt: e.target.value }))
+                    }
+                  />
+                  <p className="text-muted-foreground text-xs">
+                    Leave empty for immediate. Discount auto-activates when start
+                    time is reached.
+                  </p>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="expiresAt">Expires at (optional)</Label>
                   <Input
                     id="expiresAt"
@@ -452,7 +505,10 @@ export default function DiscountsPage() {
                   <Select
                     value={form.status}
                     onValueChange={(v) =>
-                      setForm((f) => ({ ...f, status: v as "active" | "disabled" }))
+                      setForm((f) => ({
+                        ...f,
+                        status: v as "active" | "disabled" | "scheduled",
+                      }))
                     }
                   >
                     <SelectTrigger>
@@ -460,6 +516,7 @@ export default function DiscountsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="scheduled">Scheduled</SelectItem>
                       <SelectItem value="disabled">Disabled</SelectItem>
                     </SelectContent>
                   </Select>
@@ -633,15 +690,17 @@ export default function DiscountsPage() {
                         {d.maxUsage != null ? ` / ${d.maxUsage}` : ""}
                       </TableCell>
                       <TableCell>
-                        <span
-                          className={
-                            d.status === "active"
-                              ? "text-emerald-600"
-                              : "text-muted-foreground"
+                        <Badge
+                          variant={
+                            getEffectiveStatusBadge(d).variant as
+                              | "default"
+                              | "secondary"
+                              | "destructive"
+                              | "outline"
                           }
                         >
-                          {d.status}
-                        </span>
+                          {getEffectiveStatusBadge(d).label}
+                        </Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {formatExpires(d)}
