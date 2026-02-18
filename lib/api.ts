@@ -392,6 +392,32 @@ export async function getOrders(
   return res.json();
 }
 
+export type ExportOrdersParams = {
+  startDate: string;
+  endDate: string;
+  format?: "csv" | "xlsx";
+  status?: string;
+  paymentStatus?: string;
+  search?: string;
+};
+
+export async function exportOrders(params: ExportOrdersParams): Promise<Blob> {
+  const searchParams = new URLSearchParams();
+  searchParams.set("startDate", params.startDate);
+  searchParams.set("endDate", params.endDate);
+  searchParams.set("format", params.format ?? "csv");
+  if (params.status) searchParams.set("status", params.status);
+  if (params.paymentStatus) searchParams.set("paymentStatus", params.paymentStatus);
+  if (params.search?.trim()) searchParams.set("search", params.search.trim());
+  const url = `${apiUrl}/api/admin/orders/export?${searchParams.toString()}`;
+  const res = await fetchWithAuth(url);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error ?? "Failed to export orders");
+  }
+  return res.blob();
+}
+
 export async function getOrder(id: string): Promise<Order> {
   const res = await fetchWithAuth(`${apiUrl}/api/admin/orders/${id}`);
   if (!res.ok) throw new Error("Failed to fetch order");

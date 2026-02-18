@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { getOrders, type Order } from "@/lib/api";
+import type { DateRange } from "react-day-picker";
+import { format } from "date-fns";
+import { getOrders, exportOrders, type Order } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -28,7 +30,18 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ExternalLinkIcon,
+  DownloadIcon,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { toast } from "sonner";
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -84,6 +97,11 @@ export default function OrdersPage() {
   const [pageSize, setPageSize] = useState(20);
   const abortRef = useRef<AbortController | null>(null);
 
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportDateRange, setExportDateRange] = useState<DateRange | undefined>();
+  const [exportFormat, setExportFormat] = useState<"csv" | "xlsx">("csv");
+  const [exporting, setExporting] = useState(false);
+
   const loadOrders = useCallback(async () => {
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -127,6 +145,37 @@ export default function OrdersPage() {
   useEffect(() => {
     setPage(1);
   }, [searchQuery, statusFilter, paymentFilter, sortBy, sortOrder, pageSize]);
+
+  const handleExport = async () => {
+    if (!exportDateRange?.from) {
+      toast.error("Please select a date range");
+      return;
+    }
+    const to = exportDateRange.to ?? exportDateRange.from;
+    setExporting(true);
+    try {
+      const blob = await exportOrders({
+        startDate: format(exportDateRange.from, "yyyy-MM-dd"),
+        endDate: format(to, "yyyy-MM-dd"),
+        format: exportFormat,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        paymentStatus: paymentFilter !== "all" ? paymentFilter : undefined,
+        search: searchQuery.trim() || undefined,
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `orders-export-${format(exportDateRange.from, "yyyy-MM-dd")}-${format(to, "yyyy-MM-dd")}.${exportFormat}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Export downloaded");
+      setExportOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleSort = (field: OrderSortBy) => {
     if (sortBy === field) {
@@ -210,6 +259,67 @@ export default function OrdersPage() {
                 <SelectItem value="failed">Failed</SelectItem>
               </SelectContent>
             </Select>
+            <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <DownloadIcon className="size-4" />
+                  Export
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Export orders</DialogTitle>
+                  <DialogDescription>
+                    Download orders within a date range. Export respects your
+                    current status, payment, and search filters.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-col gap-4 py-4">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-medium">Date range</label>
+                    <DateRangePicker
+                      value={exportDateRange}
+                      onChange={setExportDateRange}
+                      placeholder="Select start and end date"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-medium">Format</label>
+                    <Select
+                      value={exportFormat}
+                      onValueChange={(v) =>
+                        setExportFormat(v as "csv" | "xlsx")
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="csv">CSV</SelectItem>
+                        <SelectItem value="xlsx" disabled>
+                          XLSX (coming soon)
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setExportOpen(false)}
+                    disabled={exporting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleExport}
+                    disabled={exporting || !exportDateRange?.from}
+                  >
+                    {exporting ? "Exporting…" : "Download"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
             <Button asChild>
               <Link href="/admin/orders/new">
                 <PlusIcon className="size-4" />
