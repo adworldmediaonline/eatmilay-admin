@@ -507,6 +507,8 @@ export type Discount = {
   code: string;
   type: "percentage" | "fixed";
   value: number;
+  description: string | null;
+  allowAutoApply: boolean;
   productIds: string[];
   minOrderAmount: number | null;
   maxUsage: number | null;
@@ -561,6 +563,8 @@ export async function createDiscount(data: {
   code: string;
   type: "percentage" | "fixed";
   value: number;
+  description?: string | null;
+  allowAutoApply?: boolean;
   productIds?: string[];
   minOrderAmount?: number | null;
   maxUsage?: number | null;
@@ -585,6 +589,8 @@ export async function updateDiscount(
     code: string;
     type: "percentage" | "fixed";
     value: number;
+    description: string | null;
+    allowAutoApply: boolean;
     productIds: string[];
     minOrderAmount: number | null;
     maxUsage: number | null;
@@ -609,6 +615,32 @@ export async function deleteDiscount(id: string): Promise<void> {
     method: "DELETE",
   });
   if (!res.ok) throw new Error("Failed to delete discount");
+}
+
+export type CouponBehaviorSettings = {
+  autoApply: boolean;
+  autoApplyStrategy: "best_savings" | "first_created" | "highest_percentage" | "customer_choice";
+  showToastOnApply: boolean;
+};
+
+export async function getCouponSettings(): Promise<CouponBehaviorSettings> {
+  const res = await fetchWithAuth(`${apiUrl}/api/admin/settings/coupon`);
+  if (!res.ok) throw new Error("Failed to fetch coupon settings");
+  return res.json();
+}
+
+export async function updateCouponSettings(
+  data: CouponBehaviorSettings
+): Promise<CouponBehaviorSettings> {
+  const res = await fetchWithAuth(`${apiUrl}/api/admin/settings/coupon`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? "Failed to update coupon settings");
+  }
+  return res.json();
 }
 
 // Products

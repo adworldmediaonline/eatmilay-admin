@@ -45,6 +45,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Switch } from "@/components/ui/switch";
+import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   PlusIcon,
@@ -67,6 +69,8 @@ export default function DiscountsPage() {
   const [editing, setEditing] = useState<Discount | null>(null);
   const [form, setForm] = useState<{
     code: string;
+    description: string;
+    allowAutoApply: boolean;
     type: "percentage" | "fixed";
     value: number;
     productIds: string[];
@@ -77,6 +81,8 @@ export default function DiscountsPage() {
     status: "active" | "disabled" | "scheduled";
   }>({
     code: "",
+    description: "",
+    allowAutoApply: true,
     type: "percentage",
     value: 0,
     productIds: [],
@@ -152,6 +158,8 @@ export default function DiscountsPage() {
     setNewProductId("");
     setForm({
       code: "",
+      description: "",
+      allowAutoApply: true,
       type: "percentage",
       value: 0,
       productIds: [],
@@ -169,6 +177,8 @@ export default function DiscountsPage() {
     setNewProductId("");
     setForm({
       code: d.code,
+      description: d.description ?? "",
+      allowAutoApply: d.allowAutoApply ?? true,
       type: d.type,
       value: d.value,
       productIds: d.productIds ?? [],
@@ -212,6 +222,8 @@ export default function DiscountsPage() {
       if (editing) {
         await updateDiscount(editing.id, {
           code: form.code.trim().toUpperCase(),
+          description: form.description.trim() || null,
+          allowAutoApply: form.allowAutoApply,
           type: form.type,
           value: form.value,
           productIds: form.productIds,
@@ -225,6 +237,8 @@ export default function DiscountsPage() {
       } else {
         await createDiscount({
           code: form.code.trim().toUpperCase(),
+          description: form.description.trim() || null,
+          allowAutoApply: form.allowAutoApply,
           type: form.type,
           value: form.value,
           productIds: form.productIds,
@@ -399,6 +413,21 @@ export default function DiscountsPage() {
                     required
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Display description (optional)</Label>
+                  <Input
+                    id="description"
+                    value={form.description}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, description: e.target.value }))
+                    }
+                    placeholder="Custom text shown to customers"
+                    maxLength={200}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Custom text shown to customers. Leave empty to auto-generate.
+                  </p>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Type</Label>
@@ -456,6 +485,34 @@ export default function DiscountsPage() {
                     placeholder="0"
                   />
                 </div>
+                <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+                  <div>
+                    <Label htmlFor="allowAutoApply">Allow auto-apply</Label>
+                    <p className="text-muted-foreground text-xs">
+                      When store auto-apply is on, this coupon can be automatically
+                      applied. Disable for manual-only coupons.
+                    </p>
+                    {form.allowAutoApply && (
+                      <p className="text-amber-600 dark:text-amber-500 mt-1 text-xs">
+                        Also enable &quot;Auto-apply best coupon&quot; in{" "}
+                        <Link
+                          href="/admin/settings"
+                          className="underline hover:no-underline"
+                        >
+                          Settings → Coupon behavior
+                        </Link>{" "}
+                        for this to apply site-wide.
+                      </p>
+                    )}
+                  </div>
+                  <Switch
+                    id="allowAutoApply"
+                    checked={form.allowAutoApply}
+                    onCheckedChange={(checked) =>
+                      setForm((f) => ({ ...f, allowAutoApply: checked }))
+                    }
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="maxUsage">Max uses (optional)</Label>
                   <Input
@@ -488,6 +545,13 @@ export default function DiscountsPage() {
                     Leave empty for immediate. Discount auto-activates when start
                     time is reached.
                   </p>
+                  {form.startsAt && new Date(form.startsAt) > new Date() && (
+                    <p className="text-amber-600 dark:text-amber-500 text-xs">
+                      This coupon will only be available after{" "}
+                      {new Date(form.startsAt).toLocaleString()}. Leave empty for
+                      immediate availability.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="expiresAt">Expires at (optional)</Label>
