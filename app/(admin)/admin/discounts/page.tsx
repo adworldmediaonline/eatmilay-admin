@@ -4,11 +4,13 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   getDiscounts,
   getProducts,
+  getProductCategories,
   createDiscount,
   updateDiscount,
   deleteDiscount,
   type Discount,
   type Product,
+  type ProductCategory,
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,6 +64,7 @@ import { toast } from "sonner";
 export default function DiscountsPage() {
   const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -74,11 +77,14 @@ export default function DiscountsPage() {
     type: "percentage" | "fixed";
     value: number;
     productIds: string[];
+    categoryIds: string[];
     minOrderAmount: number | null;
     maxUsage: number | null;
     startsAt: string;
     expiresAt: string;
     status: "active" | "disabled" | "scheduled";
+    firstOrderOnly: boolean;
+    referralCode: string;
   }>({
     code: "",
     description: "",
@@ -86,13 +92,17 @@ export default function DiscountsPage() {
     type: "percentage",
     value: 0,
     productIds: [],
+    categoryIds: [],
     minOrderAmount: null,
     maxUsage: null,
     startsAt: "",
     expiresAt: "",
     status: "active",
+    firstOrderOnly: false,
+    referralCode: "",
   });
   const [newProductId, setNewProductId] = useState("");
+  const [newCategoryId, setNewCategoryId] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -147,8 +157,14 @@ export default function DiscountsPage() {
 
   useEffect(() => {
     if (sheetOpen) {
-      getProducts({ limit: 10000 })
-        .then((data) => setProducts(data.items))
+      Promise.all([
+        getProducts({ limit: 10000 }),
+        getProductCategories({ limit: 1000 }),
+      ])
+        .then(([productsRes, categoriesRes]) => {
+          setProducts(productsRes.items);
+          setCategories(categoriesRes.items);
+        })
         .catch(() => []);
     }
   }, [sheetOpen]);
@@ -156,6 +172,7 @@ export default function DiscountsPage() {
   const openCreate = () => {
     setEditing(null);
     setNewProductId("");
+    setNewCategoryId("");
     setForm({
       code: "",
       description: "",
@@ -163,11 +180,14 @@ export default function DiscountsPage() {
       type: "percentage",
       value: 0,
       productIds: [],
+      categoryIds: [],
       minOrderAmount: null,
       maxUsage: null,
       startsAt: "",
       expiresAt: "",
       status: "active",
+      firstOrderOnly: false,
+      referralCode: "",
     });
     setSheetOpen(true);
   };
@@ -175,6 +195,7 @@ export default function DiscountsPage() {
   const openEdit = (d: Discount) => {
     setEditing(d);
     setNewProductId("");
+    setNewCategoryId("");
     setForm({
       code: d.code,
       description: d.description ?? "",
@@ -182,11 +203,14 @@ export default function DiscountsPage() {
       type: d.type,
       value: d.value,
       productIds: d.productIds ?? [],
+      categoryIds: d.categoryIds ?? [],
       minOrderAmount: d.minOrderAmount ?? null,
       maxUsage: d.maxUsage ?? null,
       startsAt: d.startsAt ? toLocalDatetimeString(d.startsAt) : "",
       expiresAt: d.expiresAt ? toLocalDatetimeString(d.expiresAt) : "",
       status: d.status,
+      firstOrderOnly: d.firstOrderOnly ?? false,
+      referralCode: d.referralCode ?? "",
     });
     setSheetOpen(true);
   };
@@ -204,6 +228,22 @@ export default function DiscountsPage() {
     setForm((f) => ({
       ...f,
       productIds: f.productIds.filter((id) => id !== productId),
+    }));
+  };
+
+  const addCategoryToForm = () => {
+    if (!newCategoryId || form.categoryIds.includes(newCategoryId)) return;
+    setForm((f) => ({
+      ...f,
+      categoryIds: [...f.categoryIds, newCategoryId],
+    }));
+    setNewCategoryId("");
+  };
+
+  const removeCategoryFromForm = (categoryId: string) => {
+    setForm((f) => ({
+      ...f,
+      categoryIds: f.categoryIds.filter((id) => id !== categoryId),
     }));
   };
 
@@ -227,11 +267,14 @@ export default function DiscountsPage() {
           type: form.type,
           value: form.value,
           productIds: form.productIds,
+          categoryIds: form.categoryIds,
           minOrderAmount: form.minOrderAmount,
           maxUsage: form.maxUsage,
           startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : null,
           expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
           status: form.status,
+          firstOrderOnly: form.firstOrderOnly,
+          referralCode: form.referralCode.trim() || null,
         });
         toast.success("Discount updated");
       } else {
@@ -242,11 +285,14 @@ export default function DiscountsPage() {
           type: form.type,
           value: form.value,
           productIds: form.productIds,
+          categoryIds: form.categoryIds,
           minOrderAmount: form.minOrderAmount,
           maxUsage: form.maxUsage,
           startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : null,
           expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
           status: form.status,
+          firstOrderOnly: form.firstOrderOnly,
+          referralCode: form.referralCode.trim() || null,
         });
         toast.success("Discount created");
       }
@@ -639,6 +685,96 @@ export default function DiscountsPage() {
                       })}
                     </div>
                   )}
+                </div>
+                <div className="space-y-2">
+                  <Label>Categories (optional, empty = all categories)</Label>
+                  <p className="text-muted-foreground text-xs">
+                    Restrict discount to products in selected categories.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Select
+                      value={newCategoryId || "__none__"}
+                      onValueChange={(v) =>
+                        setNewCategoryId(v === "__none__" ? "" : v)
+                      }
+                    >
+                      <SelectTrigger className="w-48">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Select category</SelectItem>
+                        {categories
+                          .filter((c) => !form.categoryIds.includes(c.id))
+                          .map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addCategoryToForm}
+                      disabled={!newCategoryId}
+                    >
+                      <PlusIcon className="size-4" />
+                      Add
+                    </Button>
+                  </div>
+                  {form.categoryIds.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {form.categoryIds.map((cid) => {
+                        const c = categories.find((x) => x.id === cid);
+                        return (
+                          <span
+                            key={cid}
+                            className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-sm"
+                          >
+                            {c?.name ?? cid}
+                            <button
+                              type="button"
+                              onClick={() => removeCategoryFromForm(cid)}
+                              className="hover:text-destructive"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+                  <div>
+                    <Label htmlFor="firstOrderOnly">First order only</Label>
+                    <p className="text-muted-foreground text-xs">
+                      Only valid for customers who have never placed an order.
+                    </p>
+                  </div>
+                  <Switch
+                    id="firstOrderOnly"
+                    checked={form.firstOrderOnly}
+                    onCheckedChange={(checked) =>
+                      setForm((f) => ({ ...f, firstOrderOnly: checked }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="referralCode">Referral code (optional)</Label>
+                  <Input
+                    id="referralCode"
+                    value={form.referralCode}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, referralCode: e.target.value }))
+                    }
+                    placeholder="e.g. FRIEND10"
+                  />
+                  <p className="text-muted-foreground text-xs">
+                    When set, discount only applies when user landed with ?ref=CODE
+                    in URL.
+                  </p>
                 </div>
                 <Button type="submit" disabled={saving} className="w-full">
                   {saving ? (

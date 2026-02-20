@@ -510,9 +510,12 @@ export type Discount = {
   description: string | null;
   allowAutoApply: boolean;
   productIds: string[];
+  categoryIds: string[];
   minOrderAmount: number | null;
   maxUsage: number | null;
   usedCount: number;
+  firstOrderOnly: boolean;
+  referralCode: string | null;
   startsAt: string | null;
   expiresAt: string | null;
   status: "active" | "disabled" | "scheduled";
@@ -566,11 +569,14 @@ export async function createDiscount(data: {
   description?: string | null;
   allowAutoApply?: boolean;
   productIds?: string[];
+  categoryIds?: string[];
   minOrderAmount?: number | null;
   maxUsage?: number | null;
   startsAt?: string | null;
   expiresAt?: string | null;
   status?: "active" | "disabled" | "scheduled";
+  firstOrderOnly?: boolean;
+  referralCode?: string | null;
 }): Promise<Discount> {
   const res = await fetchWithAuth(`${apiUrl}/api/admin/discounts`, {
     method: "POST",
@@ -592,11 +598,14 @@ export async function updateDiscount(
     description: string | null;
     allowAutoApply: boolean;
     productIds: string[];
+    categoryIds: string[];
     minOrderAmount: number | null;
     maxUsage: number | null;
     startsAt: string | null;
     expiresAt: string | null;
     status: "active" | "disabled" | "scheduled";
+    firstOrderOnly: boolean;
+    referralCode: string | null;
   }>
 ): Promise<Discount> {
   const res = await fetchWithAuth(`${apiUrl}/api/admin/discounts/${id}`, {
@@ -639,6 +648,30 @@ export async function updateCouponSettings(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error ?? "Failed to update coupon settings");
+  }
+  return res.json();
+}
+
+export type ShippingSettings = {
+  freeShippingThreshold: number | null;
+};
+
+export async function getShippingSettings(): Promise<ShippingSettings> {
+  const res = await fetchWithAuth(`${apiUrl}/api/admin/settings/shipping`);
+  if (!res.ok) throw new Error("Failed to fetch shipping settings");
+  return res.json();
+}
+
+export async function updateShippingSettings(
+  data: ShippingSettings
+): Promise<ShippingSettings> {
+  const res = await fetchWithAuth(`${apiUrl}/api/admin/settings/shipping`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? "Failed to update shipping settings");
   }
   return res.json();
 }
