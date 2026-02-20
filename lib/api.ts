@@ -970,3 +970,72 @@ export async function deleteImage(publicId: string): Promise<void> {
     throw new Error(err.error ?? "Failed to delete image");
   }
 }
+
+// Reviews
+export type AdminReview = {
+  id: string;
+  type: "product" | "order";
+  productId: string | null;
+  orderId: string | null;
+  orderNumber: string | null;
+  customerId: string | null;
+  customerName: string | null;
+  rating: number;
+  title: string | null;
+  body: string | null;
+  status: "published" | "hidden";
+  verifiedPurchase: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GetReviewsParams = {
+  type?: "product" | "order";
+  status?: "published" | "hidden";
+  productId?: string;
+  limit?: number;
+  offset?: number;
+  signal?: AbortSignal;
+};
+
+export type GetReviewsResponse = {
+  items: AdminReview[];
+  total: number;
+};
+
+export async function getReviews(
+  params?: GetReviewsParams
+): Promise<GetReviewsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.type) searchParams.set("type", params.type);
+  if (params?.status) searchParams.set("status", params.status);
+  if (params?.productId) searchParams.set("productId", params.productId);
+  if (params?.limit != null) searchParams.set("limit", String(params.limit));
+  if (params?.offset != null) searchParams.set("offset", String(params.offset));
+  const search = searchParams.toString();
+  const url = `${apiUrl}/api/admin/reviews${search ? `?${search}` : ""}`;
+  const res = await fetchWithAuth(url, { signal: params?.signal });
+  if (!res.ok) throw new Error("Failed to fetch reviews");
+  return res.json();
+}
+
+export async function updateReview(
+  id: string,
+  data: { status: "published" | "hidden" }
+): Promise<void> {
+  const res = await fetchWithAuth(`${apiUrl}/api/admin/reviews/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? "Failed to update review");
+  }
+}
+
+export async function deleteReview(id: string): Promise<void> {
+  const res = await fetchWithAuth(`${apiUrl}/api/admin/reviews/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to delete review");
+}
