@@ -287,26 +287,48 @@ export default function OrderDetailPage() {
             );
           })()}
 
-          {(order.shippingAddress || order.paymentMethod || order.trackingNumber) && (
+          {(order.shippingAddress || order.paymentMethod || order.paymentStatus || order.trackingNumber || order.razorpayPaymentId || order.razorpayOrderId) && (
             <div className="space-y-4 rounded-lg border p-4">
               <h3 className="font-medium">Payment & shipping</h3>
               <dl className="space-y-1 text-sm">
                 {order.paymentMethod && (
                   <div>
                     <dt className="text-muted-foreground">Payment method</dt>
-                    <dd className="capitalize">{order.paymentMethod}</dd>
+                    <dd className="capitalize">{order.paymentMethod === "razorpay" ? "Online (Razorpay)" : order.paymentMethod === "cod" ? "Cash on Delivery" : order.paymentMethod}</dd>
                   </div>
                 )}
-                {order.shippingAmount != null && order.shippingAmount > 0 && (
+                {order.paymentStatus && (
                   <div>
-                    <dt className="text-muted-foreground">Shipping</dt>
+                    <dt className="text-muted-foreground">Payment status</dt>
                     <dd>
-                      {formatPrice(order.shippingAmount, order.currency)}
-                      {order.courierName && ` (${order.courierName})`}
-                      {order.estimatedDelivery && ` · ${order.estimatedDelivery}`}
+                      <Badge variant={order.paymentStatus === "completed" ? "default" : "secondary"} className="text-xs capitalize">
+                        {order.paymentStatus}
+                      </Badge>
                     </dd>
                   </div>
                 )}
+                {order.razorpayPaymentId && (
+                  <div>
+                    <dt className="text-muted-foreground">Payment ID</dt>
+                    <dd className="font-mono text-xs break-all">{order.razorpayPaymentId}</dd>
+                  </div>
+                )}
+                {order.razorpayOrderId && (
+                  <div>
+                    <dt className="text-muted-foreground">Razorpay order ID</dt>
+                    <dd className="font-mono text-xs break-all">{order.razorpayOrderId}</dd>
+                  </div>
+                )}
+                <div>
+                  <dt className="text-muted-foreground">Shipping</dt>
+                  <dd>
+                    {order.shippingAmount != null && order.shippingAmount > 0
+                      ? formatPrice(order.shippingAmount, order.currency)
+                      : "Free"}
+                    {order.courierName && ` (${order.courierName})`}
+                    {order.estimatedDelivery && ` · ${order.estimatedDelivery}`}
+                  </dd>
+                </div>
                 {order.trackingNumber && (
                   <div>
                     <dt className="text-muted-foreground">Tracking</dt>
@@ -431,20 +453,20 @@ export default function OrderDetailPage() {
             </TableBody>
           </Table>
           <div className="space-y-1 border-t p-4 text-right text-sm">
-            <p>Subtotal: {formatPrice(order.subtotal, order.currency)}</p>
+            <p>Subtotal: {formatPrice(order.subtotal ?? order.total, order.currency)}</p>
             {order.discountAmount != null && order.discountAmount > 0 && (
               <p className="text-muted-foreground">
-                Discount: -{formatPrice(order.discountAmount, order.currency)}
+                Discount{order.couponCode ? ` (${order.couponCode})` : ""}: -{formatPrice(order.discountAmount, order.currency)}
               </p>
             )}
-            {order.couponCode && (
-              <p className="text-muted-foreground">
-                Coupon: {order.couponCode}
-              </p>
+            {order.couponCode && !(order.discountAmount != null && order.discountAmount > 0) && (
+              <p className="text-muted-foreground">Coupon: {order.couponCode}</p>
             )}
-            {order.shippingAmount != null && order.shippingAmount > 0 && (
-              <p>Shipping: {formatPrice(order.shippingAmount, order.currency)}</p>
-            )}
+            <p>
+              Shipping: {order.shippingAmount != null && order.shippingAmount > 0
+                ? formatPrice(order.shippingAmount, order.currency)
+                : "Free"}
+            </p>
             <p className="font-semibold">
               Total: {formatPrice(order.total, order.currency)}
             </p>

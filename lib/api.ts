@@ -332,6 +332,7 @@ export type Order = {
   paymentMethod?: string | null;
   paymentStatus?: string | null;
   razorpayOrderId?: string | null;
+  razorpayPaymentId?: string | null;
   shippingAmount?: number;
   courierName?: string | null;
   estimatedDelivery?: string | null;
