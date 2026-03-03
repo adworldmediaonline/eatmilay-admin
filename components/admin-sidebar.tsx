@@ -23,6 +23,7 @@ import {
   LayersIcon,
   ShoppingCartIcon,
   PercentIcon,
+  MessageSquareIcon,
 } from "lucide-react";
 
 const getAdminNavMain = (isSuperAdmin: boolean) => [
@@ -60,6 +61,11 @@ const getAdminNavMain = (isSuperAdmin: boolean) => [
         title: "Discounts",
         url: "/admin/discounts",
         icon: <PercentIcon />,
+      },
+      {
+        title: "Reviews",
+        url: "/admin/reviews",
+        icon: <MessageSquareIcon />,
       },
     ],
   },
