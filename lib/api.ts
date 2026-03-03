@@ -1,4 +1,10 @@
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3005";
+const backendUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3005";
+
+/** Client: use same-origin (proxied) so cookies are sent. Server: use backend URL with forwarded cookies. */
+function getApiUrl(): string {
+  if (typeof window !== "undefined") return ""; // Relative URLs → same-origin, cookies included
+  return backendUrl;
+}
 
 export type Role = {
   id: string;
@@ -27,7 +33,7 @@ export async function fetchWithAuth(
 }
 
 export async function getRoles(): Promise<Role[]> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/roles`);
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/roles`);
   if (!res.ok) throw new Error("Failed to fetch roles");
   return res.json();
 }
@@ -38,7 +44,7 @@ export async function createRole(data: {
   description?: string;
   permissions: { user: string[]; session: string[] };
 }): Promise<Role> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/roles`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/roles`, {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -58,7 +64,7 @@ export async function updateRole(
     permissions: { user: string[]; session: string[] };
   }>
 ): Promise<Role> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/roles/${id}`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/roles/${id}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
@@ -70,7 +76,7 @@ export async function updateRole(
 }
 
 export async function deleteRole(id: string): Promise<void> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/roles/${id}`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/roles/${id}`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error("Failed to delete role");
@@ -81,7 +87,7 @@ export async function assignRoleToUser(
   role: string
 ): Promise<void> {
   const res = await fetchWithAuth(
-    `${apiUrl}/api/admin/users/${userId}/assign-role`,
+    `${getApiUrl()}/api/admin/users/${userId}/assign-role`,
     {
       method: "POST",
       body: JSON.stringify({ role }),
@@ -143,7 +149,7 @@ export async function getProductCategories(
   if (params?.limit != null) searchParams.set("limit", String(params.limit));
   if (params?.offset != null) searchParams.set("offset", String(params.offset));
   const search = searchParams.toString();
-  const url = `${apiUrl}/api/admin/product-categories${search ? `?${search}` : ""}`;
+  const url = `${getApiUrl()}/api/admin/product-categories${search ? `?${search}` : ""}`;
   const res = await fetchWithAuth(url, { signal: params?.signal });
   if (!res.ok) throw new Error("Failed to fetch categories");
   return res.json();
@@ -155,7 +161,7 @@ export async function createProductCategory(data: {
   description?: string;
   image?: ProductImage | null;
 }): Promise<ProductCategory> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/product-categories`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/product-categories`, {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -176,7 +182,7 @@ export async function updateProductCategory(
   }>
 ): Promise<ProductCategory> {
   const res = await fetchWithAuth(
-    `${apiUrl}/api/admin/product-categories/${id}`,
+    `${getApiUrl()}/api/admin/product-categories/${id}`,
     { method: "PATCH", body: JSON.stringify(data) }
   );
   if (!res.ok) {
@@ -188,7 +194,7 @@ export async function updateProductCategory(
 
 export async function deleteProductCategory(id: string): Promise<void> {
   const res = await fetchWithAuth(
-    `${apiUrl}/api/admin/product-categories/${id}`,
+    `${getApiUrl()}/api/admin/product-categories/${id}`,
     { method: "DELETE" }
   );
   if (!res.ok) throw new Error("Failed to delete category");
@@ -231,7 +237,7 @@ export async function getProductCollections(
   if (params?.limit != null) searchParams.set("limit", String(params.limit));
   if (params?.offset != null) searchParams.set("offset", String(params.offset));
   const search = searchParams.toString();
-  const url = `${apiUrl}/api/admin/product-collections${search ? `?${search}` : ""}`;
+  const url = `${getApiUrl()}/api/admin/product-collections${search ? `?${search}` : ""}`;
   const res = await fetchWithAuth(url, { signal: params?.signal });
   if (!res.ok) throw new Error("Failed to fetch collections");
   return res.json();
@@ -244,7 +250,7 @@ export async function createProductCollection(data: {
   image?: ProductImage | null;
   productIds?: string[];
 }): Promise<ProductCollection> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/product-collections`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/product-collections`, {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -256,7 +262,7 @@ export async function createProductCollection(data: {
 }
 
 export async function getProductCollection(id: string): Promise<ProductCollection> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/product-collections/${id}`);
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/product-collections/${id}`);
   if (!res.ok) throw new Error("Failed to fetch collection");
   return res.json();
 }
@@ -272,7 +278,7 @@ export async function updateProductCollection(
   }>
 ): Promise<ProductCollection> {
   const res = await fetchWithAuth(
-    `${apiUrl}/api/admin/product-collections/${id}`,
+    `${getApiUrl()}/api/admin/product-collections/${id}`,
     { method: "PATCH", body: JSON.stringify(data) }
   );
   if (!res.ok) {
@@ -284,7 +290,7 @@ export async function updateProductCollection(
 
 export async function deleteProductCollection(id: string): Promise<void> {
   const res = await fetchWithAuth(
-    `${apiUrl}/api/admin/product-collections/${id}`,
+    `${getApiUrl()}/api/admin/product-collections/${id}`,
     { method: "DELETE" }
   );
   if (!res.ok) throw new Error("Failed to delete collection");
@@ -401,7 +407,7 @@ export async function getOrders(
   if (params?.limit != null) searchParams.set("limit", String(params.limit));
   if (params?.offset != null) searchParams.set("offset", String(params.offset));
   const search = searchParams.toString();
-  const url = `${apiUrl}/api/admin/orders${search ? `?${search}` : ""}`;
+  const url = `${getApiUrl()}/api/admin/orders${search ? `?${search}` : ""}`;
   const res = await fetchWithAuth(url, { signal: params?.signal });
   if (!res.ok) throw new Error("Failed to fetch orders");
   return res.json();
@@ -424,7 +430,7 @@ export async function exportOrders(params: ExportOrdersParams): Promise<Blob> {
   if (params.status) searchParams.set("status", params.status);
   if (params.paymentStatus) searchParams.set("paymentStatus", params.paymentStatus);
   if (params.search?.trim()) searchParams.set("search", params.search.trim());
-  const url = `${apiUrl}/api/admin/orders/export?${searchParams.toString()}`;
+  const url = `${getApiUrl()}/api/admin/orders/export?${searchParams.toString()}`;
   const res = await fetchWithAuth(url);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -434,7 +440,7 @@ export async function exportOrders(params: ExportOrdersParams): Promise<Blob> {
 }
 
 export async function getOrder(id: string): Promise<Order> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/orders/${id}`);
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/orders/${id}`);
   if (!res.ok) throw new Error("Failed to fetch order");
   return res.json();
 }
@@ -451,7 +457,7 @@ export async function createOrder(data: {
   couponCode?: string | null;
   notes?: string | null;
 }): Promise<Order> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/orders`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/orders`, {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -468,7 +474,7 @@ export async function createShiprocketOrder(orderId: string): Promise<{
   error?: string;
 }> {
   const res = await fetchWithAuth(
-    `${apiUrl}/api/admin/orders/${orderId}/shiprocket/create`,
+    `${getApiUrl()}/api/admin/orders/${orderId}/shiprocket/create`,
     { method: "POST" }
   );
   const data = await res.json();
@@ -478,7 +484,7 @@ export async function createShiprocketOrder(orderId: string): Promise<{
 
 export async function trackOrder(orderId: string): Promise<TrackingData> {
   const res = await fetchWithAuth(
-    `${apiUrl}/api/admin/orders/${orderId}/shiprocket/track`
+    `${getApiUrl()}/api/admin/orders/${orderId}/shiprocket/track`
   );
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -491,7 +497,7 @@ export async function updateOrder(
   id: string,
   data: { status?: Order["status"]; notes?: string | null }
 ): Promise<Order> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/orders/${id}`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/orders/${id}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
@@ -551,14 +557,14 @@ export async function getDiscounts(
   if (params?.limit != null) searchParams.set("limit", String(params.limit));
   if (params?.offset != null) searchParams.set("offset", String(params.offset));
   const search = searchParams.toString();
-  const url = `${apiUrl}/api/admin/discounts${search ? `?${search}` : ""}`;
+  const url = `${getApiUrl()}/api/admin/discounts${search ? `?${search}` : ""}`;
   const res = await fetchWithAuth(url, { signal: params?.signal });
   if (!res.ok) throw new Error("Failed to fetch discounts");
   return res.json();
 }
 
 export async function getDiscount(id: string): Promise<Discount> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/discounts/${id}`);
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/discounts/${id}`);
   if (!res.ok) throw new Error("Failed to fetch discount");
   return res.json();
 }
@@ -579,7 +585,7 @@ export async function createDiscount(data: {
   firstOrderOnly?: boolean;
   referralCode?: string | null;
 }): Promise<Discount> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/discounts`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/discounts`, {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -609,7 +615,7 @@ export async function updateDiscount(
     referralCode: string | null;
   }>
 ): Promise<Discount> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/discounts/${id}`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/discounts/${id}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
@@ -621,7 +627,7 @@ export async function updateDiscount(
 }
 
 export async function deleteDiscount(id: string): Promise<void> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/discounts/${id}`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/discounts/${id}`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error("Failed to delete discount");
@@ -634,7 +640,7 @@ export type CouponBehaviorSettings = {
 };
 
 export async function getCouponSettings(): Promise<CouponBehaviorSettings> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/settings/coupon`);
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/settings/coupon`);
   if (!res.ok) throw new Error("Failed to fetch coupon settings");
   return res.json();
 }
@@ -642,7 +648,7 @@ export async function getCouponSettings(): Promise<CouponBehaviorSettings> {
 export async function updateCouponSettings(
   data: CouponBehaviorSettings
 ): Promise<CouponBehaviorSettings> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/settings/coupon`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/settings/coupon`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
@@ -658,7 +664,7 @@ export type ShippingSettings = {
 };
 
 export async function getShippingSettings(): Promise<ShippingSettings> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/settings/shipping`);
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/settings/shipping`);
   if (!res.ok) throw new Error("Failed to fetch shipping settings");
   return res.json();
 }
@@ -666,7 +672,7 @@ export async function getShippingSettings(): Promise<ShippingSettings> {
 export async function updateShippingSettings(
   data: ShippingSettings
 ): Promise<ShippingSettings> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/settings/shipping`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/settings/shipping`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
@@ -780,14 +786,14 @@ export async function getProducts(
   if (params?.limit != null) searchParams.set("limit", String(params.limit));
   if (params?.offset != null) searchParams.set("offset", String(params.offset));
   const search = searchParams.toString();
-  const url = `${apiUrl}/api/admin/products${search ? `?${search}` : ""}`;
+  const url = `${getApiUrl()}/api/admin/products${search ? `?${search}` : ""}`;
   const res = await fetchWithAuth(url, { signal: params?.signal });
   if (!res.ok) throw new Error("Failed to fetch products");
   return res.json();
 }
 
 export async function getProduct(id: string): Promise<Product> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/products/${id}`);
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/products/${id}`);
   if (!res.ok) throw new Error("Failed to fetch product");
   return res.json();
 }
@@ -827,7 +833,7 @@ export type ProductCreateInput = {
 };
 
 export async function createProduct(data: ProductCreateInput): Promise<Product> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/products`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/products`, {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -848,7 +854,7 @@ export type ImportProductsResult = {
 export async function importProducts(
   content: string
 ): Promise<ImportProductsResult> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/products/import`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/products/import`, {
     method: "POST",
     body: JSON.stringify({ content }),
   });
@@ -897,7 +903,7 @@ export async function updateProduct(
   id: string,
   data: ProductUpdateInput
 ): Promise<Product> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/products/${id}`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/products/${id}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
@@ -915,14 +921,14 @@ export async function checkSlugAvailability(
   const params = new URLSearchParams({ slug });
   if (excludeId) params.set("excludeId", excludeId);
   const res = await fetchWithAuth(
-    `${apiUrl}/api/admin/products/slug-available?${params}`
+    `${getApiUrl()}/api/admin/products/slug-available?${params}`
   );
   if (!res.ok) throw new Error("Failed to check slug");
   return res.json();
 }
 
 export async function duplicateProduct(id: string): Promise<Product> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/products/${id}/duplicate`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/products/${id}/duplicate`, {
     method: "POST",
   });
   if (!res.ok) {
@@ -933,7 +939,7 @@ export async function duplicateProduct(id: string): Promise<Product> {
 }
 
 export async function deleteProduct(id: string): Promise<void> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/products/${id}`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/products/${id}`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error("Failed to delete product");
@@ -951,7 +957,7 @@ export type UploadSignature = {
 };
 
 export async function getUploadSignature(folder?: string): Promise<UploadSignature> {
-  const url = `${apiUrl}/api/admin/upload/signature${folder ? `?folder=${encodeURIComponent(folder)}` : ""}`;
+  const url = `${getApiUrl()}/api/admin/upload/signature${folder ? `?folder=${encodeURIComponent(folder)}` : ""}`;
   const res = await fetchWithAuth(url);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -961,7 +967,7 @@ export async function getUploadSignature(folder?: string): Promise<UploadSignatu
 }
 
 export async function deleteImage(publicId: string): Promise<void> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/upload/delete`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/upload/delete`, {
     method: "POST",
     body: JSON.stringify({ publicId }),
   });
@@ -1013,7 +1019,7 @@ export async function getReviews(
   if (params?.limit != null) searchParams.set("limit", String(params.limit));
   if (params?.offset != null) searchParams.set("offset", String(params.offset));
   const search = searchParams.toString();
-  const url = `${apiUrl}/api/admin/reviews${search ? `?${search}` : ""}`;
+  const url = `${getApiUrl()}/api/admin/reviews${search ? `?${search}` : ""}`;
   const res = await fetchWithAuth(url, { signal: params?.signal });
   if (!res.ok) throw new Error("Failed to fetch reviews");
   return res.json();
@@ -1023,7 +1029,7 @@ export async function updateReview(
   id: string,
   data: { status: "published" | "hidden" }
 ): Promise<void> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/reviews/${id}`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/reviews/${id}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
@@ -1034,7 +1040,7 @@ export async function updateReview(
 }
 
 export async function deleteReview(id: string): Promise<void> {
-  const res = await fetchWithAuth(`${apiUrl}/api/admin/reviews/${id}`, {
+  const res = await fetchWithAuth(`${getApiUrl()}/api/admin/reviews/${id}`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error("Failed to delete review");
